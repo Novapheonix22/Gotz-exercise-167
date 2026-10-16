@@ -1,0 +1,549 @@
+<title>Ars Nouveau Pathfinder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a spellbook page. Progress header, then a "Next up" shelf of two or three big cards, then the chapters as a checklist. */
+:root {
+  --bg: #f2eff6;          /* pale lilac vellum */
+  --surface: #ffffff;
+  --surface-2: #e9e3f1;
+  --ink: #241b2f;
+  --ink-soft: #5d5170;
+  --line: #d6cde3;
+  --source: #9b2fa3;      /* Source magenta */
+  --source-soft: #f3e1f4;
+  --archwood: #2f7a6b;    /* archwood teal, used for "done" */
+  --archwood-soft: #dcefe9;
+  --amber: #a5651a;       /* optional / side quest */
+  --amber-soft: #f6e8d4;
+  --shadow: 0 1px 2px rgba(36,27,47,.06), 0 6px 20px rgba(36,27,47,.07);
+  --f-display: "Marcellus", "Palatino Linotype", Palatino, Georgia, serif;
+  --f-body: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17121e; --surface: #221a2c; --surface-2: #2b2237; --ink: #efe8f6; --ink-soft: #b2a5c4;
+    --line: #3b3049; --source: #e07ae6; --source-soft: #3b2141; --archwood: #6fcbb5; --archwood-soft: #1c3631;
+    --amber: #e3a95a; --amber-soft: #3a2c1a; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17121e; --surface: #221a2c; --surface-2: #2b2237; --ink: #efe8f6; --ink-soft: #b2a5c4;
+  --line: #3b3049; --source: #e07ae6; --source-soft: #3b2141; --archwood: #6fcbb5; --archwood-soft: #1c3631;
+  --amber: #e3a95a; --amber-soft: #3a2c1a; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-body); font-size: 17px; line-height: 1.5;
+}
+.wrap {
+  max-width: 1080px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+  display: grid; gap: 36px;
+}
+h1, h2, h3 { font-family: var(--f-display); font-weight: 400; text-wrap: balance; margin: 0; }
+.label { font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--source); outline-offset: 2px; border-radius: 4px; }
+
+/* Header */
+header { display: grid; gap: 14px; }
+header h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.05; }
+header h1 span { color: var(--source); }
+.intro { color: var(--ink-soft); max-width: 62ch; margin: 0; }
+.meter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.meter { flex: 1 1 260px; min-width: 0; height: 12px; background: var(--surface-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.meter > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--archwood), var(--source)); transition: width .4s ease; }
+.meter-text { font-family: var(--f-mono); font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.save-state { font-size: 13px; color: var(--ink-soft); }
+.save-state b { font-weight: 500; color: var(--archwood); }
+
+/* Next up */
+.next h2 { font-size: 28px; }
+.next-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.next-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+  padding: 20px 20px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0;
+}
+.card.primary { border-color: var(--source); box-shadow: 0 0 0 1px var(--source), var(--shadow); }
+.card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pill { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; background: var(--source-soft); color: var(--source); white-space: nowrap; }
+.pill.opt { background: var(--amber-soft); color: var(--amber); }
+.card h3 { font-size: 23px; line-height: 1.15; }
+.card .why { margin: 0; color: var(--ink-soft); }
+.how { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.how li::marker { color: var(--source); }
+.tip { margin: 0; font-size: 15px; background: var(--surface-2); border-radius: 8px; padding: 8px 12px; }
+.tip b { color: var(--source); font-weight: 700; }
+.card .act { margin-top: auto; display: flex; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 8px 14px; border-radius: 9px; }
+.btn:hover { border-color: var(--source); }
+.btn.go { background: var(--archwood); border-color: var(--archwood); color: var(--surface); font-weight: 700; }
+.btn.go:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--source); }
+.alldone { background: var(--archwood-soft); border: 1px solid var(--archwood); border-radius: 14px; padding: 24px; }
+.alldone h3 { font-size: 24px; color: var(--archwood); }
+
+/* Chapters */
+.chapters { display: grid; gap: 28px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.toolbar h2 { font-size: 28px; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; color: var(--ink-soft); cursor: pointer; }
+.confirm { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+.chapter { display: grid; gap: 10px; }
+.ch-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.ch-head h3 { font-size: 22px; }
+.ch-head .label { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ch-blurb { margin: 0; color: var(--ink-soft); font-size: 15px; max-width: 70ch; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.step.done { background: var(--archwood-soft); border-color: transparent; }
+.step.done .s-title { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--archwood); }
+.step-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; }
+.step-row input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--archwood); flex: none; cursor: pointer; }
+.s-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.s-title { font-weight: 500; }
+.s-sub { font-size: 14px; color: var(--ink-soft); }
+.s-sub .needs { color: var(--amber); }
+.s-badges { display: flex; gap: 6px; flex: none; align-items: center; }
+.expand { border: 0; background: none; color: var(--ink-soft); padding: 2px 6px; font-size: 14px; border-radius: 6px; }
+.expand:hover { color: var(--source); }
+.s-detail { padding: 0 14px 14px 44px; display: grid; gap: 10px; }
+.s-detail .how { font-size: 16px; }
+.hidden-done .step.done { display: none; }
+
+footer { color: var(--ink-soft); font-size: 14px; border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 6px; }
+footer p { margin: 0; max-width: 75ch; }
+kbd { font-family: var(--f-mono); font-size: .85em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+
+@media (max-width: 520px) {
+  .s-detail { padding-left: 14px; }
+  .card { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .meter > i { transition: none; } }
+</style>
+
+<div class="wrap" id="app">
+  <header>
+    <span class="label">Ars Nouveau · guided progression</span>
+    <h1>Ars Nouveau <span>Pathfinder</span></h1>
+    <p class="intro">A step-by-step route through the mod, like an advancement tree. The cards up top show what to work on next. Tick things off as you go and the next steps unlock.</p>
+    <div class="meter-row">
+      <div class="meter" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" id="meter"><i id="meterFill"></i></div>
+      <span class="meter-text" id="meterText">0 / 0 steps</span>
+      <span class="save-state" id="saveState">Saved in this browser</span>
+    </div>
+  </header>
+
+  <section class="next" aria-labelledby="nextTitle">
+    <div class="next-head">
+      <h2 id="nextTitle">Work on this next</h2>
+      <span class="label">Steps whose requirements you've finished</span>
+    </div>
+    <div class="next-grid" id="nextGrid"></div>
+  </section>
+
+  <section class="chapters" aria-labelledby="allTitle">
+    <div class="toolbar">
+      <h2 id="allTitle">The full path</h2>
+      <div class="tools">
+        <label class="toggle"><input type="checkbox" id="hideDone"> Hide finished steps</label>
+        <button class="btn" id="expandAll" type="button">Expand all</button>
+        <span id="resetWrap"><button class="btn danger" id="resetBtn" type="button">Reset progress</button></span>
+      </div>
+    </div>
+    <div id="chapterList" class="chapters"></div>
+  </section>
+
+  <footer>
+    <p><b>Version note:</b> Ars Nouveau recipes shift between Minecraft versions (1.19 / 1.20 / 1.21) and modpacks can change them. This list tells you <em>what</em> to make and <em>why</em>. For exact ingredients, hover the item in JEI/EMI (press <kbd>R</kbd> for recipe, <kbd>U</kbd> for uses) or search it in the Worn Notebook.</p>
+    <p>Default keys: <kbd>C</kbd> opens your spell book to craft spells, right-click casts, and you can scroll through spell slots while sneaking or bind slot keys in Controls.</p>
+  </footer>
+</div>
+
+<script>
+const CHAPTERS = [
+  { id: "c1", name: "First Steps", blurb: "Get your bearings, find the magic trees, and cast your first spell. No magic resources needed yet." },
+  { id: "c2", name: "Source and Gems", blurb: "Source is the mod's power. Source Gems are the crafting currency for almost everything after this." },
+  { id: "c3", name: "Learning Glyphs", blurb: "Glyphs are the words of a spell. You unlock them at the Scribe's Table with items and XP levels." },
+  { id: "c4", name: "The Enchanting Apparatus", blurb: "The big crafting multiblock. It unlocks book upgrades, armor, enchantments and creature charms." },
+  { id: "c5", name: "Magical Helpers", blurb: "Little creatures that automate sorting, farming, mob drops and crafting. Do these in any order." },
+  { id: "c6", name: "Rituals", blurb: "One-shot powerful effects: change the weather, set the time, grow crops, fight a boss." },
+  { id: "c7", name: "Archmage", blurb: "Top-tier book, top-tier glyphs and gear that makes spells hit hard and cheap." }
+];
+
+// requires: ids that should be done first. optional: side quest, never blocks the main path.
+const STEPS = [
+  // ---- Chapter 1
+  { id: "notebook", ch: "c1", title: "Get the Worn Notebook",
+    why: "It's the mod's in-game wiki. Use it as a dictionary while this list tells you the order.",
+    how: ["Most packs give it to you the first time you join. Check your inventory.",
+          "If you don't have it, look it up in JEI. In many versions it's a book plus a Source Gem, so you may need to come back after Chapter 2.",
+          "Open it and skim the Getting Started section. You don't need to read it all."],
+    tip: "Shift-click an item in the notebook's pages to jump to its recipe." },
+  { id: "archwood", ch: "c1", title: "Find an Archwood forest", requires: [],
+    why: "Archwood is the mod's magic wood. Most early blocks need its logs or planks.",
+    how: ["Explore until you see brightly colored trees: red (Blazing), blue (Cascading), green (Flourishing) and purple (Vexing).",
+          "Chop at least 32 logs. Any color works for basic recipes.",
+          "Grab a few saplings of each color so you can farm them at home.",
+          "Pick Source Berries from the bushes there. They're food and a crafting ingredient."],
+    tip: "Archwood forests are where Starbuncles, Whirlisprigs and Drygmies live. Note the coordinates." },
+  { id: "amethyst", ch: "c1", title: "Collect amethyst shards (or lapis)",
+    why: "These get turned into Source Gems in Chapter 2.",
+    how: ["Find an amethyst geode underground and mine the clusters for shards. Aim for 16 or more.",
+          "Lapis lazuli also works in the Imbuement Chamber if you have plenty.",
+          "Don't break the budding amethyst blocks. They regrow shards over time."] },
+  { id: "novice_book", ch: "c1", title: "Craft the Novice Spell Book",
+    why: "Your wand and spell list in one. It lets you make spells from Tier 1 glyphs.",
+    how: ["Shapeless recipe: a Book plus an iron Shovel, Pickaxe, Axe and Sword.",
+          "Hold it and press C to open the spell crafting screen.",
+          "It comes with a few starter glyphs already known."] },
+  { id: "first_spell", ch: "c1", title: "Cast your first spell", requires: ["novice_book"],
+    why: "Teaches how spells work: a Form (how it's delivered) followed by Effects (what it does).",
+    how: ["Press C with the book in hand.",
+          "Click a Form first, like Projectile (shoots) or Touch (hits the block you look at).",
+          "Then add an Effect, like Break. Name the spell and save it to a slot.",
+          "Right-click to cast. Watch the blue mana bar drain and refill."],
+    tip: "Touch + Break is a free mining tool that never needs repairing." },
+
+  // ---- Chapter 2
+  { id: "imbuement", ch: "c2", title: "Build an Imbuement Chamber", requires: ["archwood"],
+    why: "This block turns amethyst or lapis into Source Gems.",
+    how: ["Look up the recipe in JEI. It's mostly archwood planks and gold.",
+          "Place it, then right-click it with amethyst shards or lapis to load it.",
+          "With no Source nearby it works slowly by itself. A Source Jar next to it makes it much faster."] },
+  { id: "gems", ch: "c2", title: "Make your first 8 Source Gems", requires: ["imbuement", "amethyst"],
+    why: "Nearly every recipe from here on uses Source Gems.",
+    how: ["Keep the chamber loaded and collect gems as they finish.",
+          "While you wait, gather the iron, gold and archwood the next steps need."],
+    tip: "Place two or three chambers side by side to multiply output." },
+  { id: "source_jar", ch: "c2", title: "Craft a Source Jar", requires: ["gems"],
+    why: "Stores Source. Machines like the Imbuement Chamber and Enchanting Apparatus pull from jars nearby.",
+    how: ["Check JEI for the recipe and craft at least one, ideally two.",
+          "Put it right next to your Imbuement Chamber."] },
+  { id: "sourcelink", ch: "c2", title: "Generate Source with a Sourcelink", requires: ["source_jar"],
+    why: "Sourcelinks fill nearby jars automatically. This is how your base gets power.",
+    how: ["Start with the Volcanic Sourcelink. You feed it burnable items like logs or coal.",
+          "Place it within a few blocks of your Source Jar and drop fuel into it.",
+          "Other types to add later: Agronomic (crops and trees growing nearby), Mycelial (food), Vitalic (animals breeding or mobs dying) and Alchemical (potions)."],
+    tip: "Archwood logs burn well in the Volcanic Sourcelink, so a small archwood tree farm pays for itself." },
+  { id: "relays", ch: "c2", title: "Move Source with a Dominion Wand and Relays", requires: ["sourcelink"], optional: true,
+    why: "Lets you put generators in one spot and machines in another.",
+    how: ["Craft a Dominion Wand and a Source Relay.",
+          "With the wand, click the jar (source) and then the relay, then the relay and the target jar.",
+          "Relays carry Source over longer distances than jars sit naturally."] },
+
+  // ---- Chapter 3
+  { id: "scribes", ch: "c3", title: "Craft a Scribe's Table", requires: ["gems"],
+    why: "This is where you learn new glyphs for your spell book.",
+    how: ["Look up the recipe in JEI and place the table (it's two blocks wide).",
+          "Right-click it with your spell book to see every glyph and what it costs.",
+          "Tier 1 glyphs work with the Novice book. Tier 2 and 3 need upgraded books."] },
+  { id: "glyphs1", ch: "c3", title: "Unlock 4 Tier 1 glyphs", requires: ["scribes", "first_spell"],
+    why: "More glyphs means more spells. Each one costs some items and a few XP levels.",
+    how: ["At the Scribe's Table, pick a glyph. It shows the items it needs.",
+          "Toss or insert the listed items. When they're all in, it takes your XP and adds the glyph.",
+          "Good first picks: Harm (damage), Amplify (stronger effect), Light (place light sources) and Leap or Heal for travel and safety."],
+    tip: "Get XP from mining, smelting or a mob farm first. Glyphs eat levels." },
+  { id: "augments", ch: "c3", title: "Learn a few Augments", requires: ["glyphs1"],
+    why: "Augments modify the glyph before them: stronger, wider, longer, gentler.",
+    how: ["Look for glyphs labeled as augments at the Scribe's Table.",
+          "Useful ones: Amplify (more power or tool tier), Extract (silk touch), Fortune (more drops), AOE (bigger area, may need a higher tier).",
+          "Place an augment right after the effect it should change."] },
+  { id: "toolkit", ch: "c3", title: "Save a basic spell kit", requires: ["augments"],
+    why: "Having the right spells bound makes everything else faster.",
+    how: ["Mining: Touch + Break + Amplify.",
+          "Combat: Projectile + Harm (add Amplify if you can afford the mana).",
+          "Utility: Touch + Light, Self + Leap or Self + Heal.",
+          "Save each to its own slot and give it a clear name."] },
+
+  // ---- Chapter 4
+  { id: "apparatus", ch: "c4", title: "Build the Enchanting Apparatus", requires: ["source_jar", "gems"],
+    why: "The heart of mid-game Ars. It upgrades books, makes armor and enchants items.",
+    how: ["Craft an Arcane Core, the Enchanting Apparatus and at least 4 Arcane Pedestals (8 for big recipes).",
+          "Put the Arcane Core on the ground and the Apparatus directly on top.",
+          "Place the pedestals in a ring within 3 blocks of the apparatus.",
+          "Keep a Source Jar with Source in it close by."],
+    tip: "To craft: put ingredients on the pedestals, then right-click the apparatus with the center item." },
+  { id: "first_apparatus", ch: "c4", title: "Do your first apparatus craft", requires: ["apparatus", "sourcelink"],
+    why: "Confirms the setup works before you spend rare materials.",
+    how: ["Pick something cheap that's crafted on the apparatus (JEI shows the apparatus as the crafting station).",
+          "Load the pedestals, right-click the apparatus with the center item, and wait for the particles to finish.",
+          "If nothing happens, check that the jar has Source and the pedestals are in range."] },
+  { id: "magebloom", ch: "c4", title: "Start a Magebloom farm", requires: ["archwood"],
+    why: "Magebloom Fiber is used for mage armor and several mid-game recipes.",
+    how: ["Look up Magebloom seeds in JEI to see how your version makes them.",
+          "Plant a small patch near your base. Process the flowers into Magebloom Fiber.",
+          "Placing it near an Agronomic Sourcelink earns Source while it grows."] },
+  { id: "armor1", ch: "c4", title: "Craft mage armor (first tier)", requires: ["magebloom", "first_apparatus"],
+    why: "Mage armor raises your max mana and mana regen, so you can cast far more.",
+    how: ["Find the first tier of mage robes, hood, leggings and boots in JEI.",
+          "Craft the full set. Later tiers are upgrades done on the apparatus."] },
+  { id: "apprentice", ch: "c4", title: "Upgrade to the Apprentice Spell Book", requires: ["first_apparatus", "glyphs1"],
+    why: "Unlocks Tier 2 glyphs, more spell slots and stronger spells.",
+    how: ["Put your Novice Spell Book on the apparatus as the center item.",
+          "Load the pedestals with the items JEI lists (expect things like diamonds, obsidian, blaze rods and quartz).",
+          "Your saved spells carry over to the new book."] },
+  { id: "glyphs2", ch: "c4", title: "Unlock 4 Tier 2 glyphs", requires: ["apprentice"],
+    why: "Tier 2 is where spells start feeling powerful.",
+    how: ["Visit the Scribe's Table with the Apprentice book.",
+          "Strong picks: Blink (teleport), AOE, Explosion, Underfoot form, Orbit form, Summon Steed, Dispel."],
+    tip: "Learn Dispel early. You need it for the Wixie in Chapter 5." },
+
+  // ---- Chapter 5
+  { id: "starbuncle", ch: "c5", title: "Get a Starbuncle", requires: ["first_apparatus"],
+    why: "Starbuncles carry items from one chest to another. Cheap and very useful for sorting.",
+    how: ["Find a wild Starbuncle in an Archwood forest and hold a gold nugget near it.",
+          "It takes the nugget and leaves a Starbuncle Token.",
+          "Craft a Starbuncle Charm on the apparatus (token plus gold ingots), then use the charm on the ground.",
+          "Use a Dominion Wand to set which chest it takes from and which it delivers to."] },
+  { id: "whirlisprig", ch: "c5", title: "Get a Whirlisprig", requires: ["first_apparatus"], optional: true,
+    why: "Speeds up nearby plant growth and makes Source from it.",
+    how: ["Find a wild Whirlisprig and grow a tree near it (bonemeal a sapling).",
+          "It drops a Whirlisprig Token. Make the charm on the apparatus.",
+          "Use the charm on any flower to summon it near your farm."] },
+  { id: "wilden", ch: "c5", title: "Hunt Wilden for drops", requires: ["toolkit"],
+    why: "Wilden Horns, Wings and Spikes are ingredients for the Drygmy and several rituals.",
+    how: ["Wilden Hunters, Stalkers and Guardians spawn in the wild, often around Archwood forests at night.",
+          "Kill a few of each type and keep the drops.",
+          "Projectile + Harm + Amplify handles them well."] },
+  { id: "drygmy", ch: "c5", title: "Get a Drygmy", requires: ["wilden"], optional: true,
+    why: "Gives you mob drops from nearby mobs without killing them. A peaceful mob farm.",
+    how: ["Throw a Wilden Horn near a wild Drygmy to befriend it and get a token.",
+          "Craft the Drygmy Charm, then use it on a block of Mossy Cobblestone.",
+          "It becomes a Drygmy Henge. Keep mobs penned nearby and put a chest next to it."] },
+  { id: "wixie", ch: "c5", title: "Get a Wixie", requires: ["glyphs2"], optional: true,
+    why: "Auto-crafts items and brews potions for you.",
+    how: ["Get a Witch down to half health or less, then hit it with a Dispel spell.",
+          "It drops a Wixie Token. Craft the Wixie Charm on the apparatus.",
+          "Use the charm on a Cauldron. Show it a recipe and give it ingredients via nearby chests."] },
+
+  // ---- Chapter 6
+  { id: "brazier", ch: "c6", title: "Build a Ritual Brazier", requires: ["first_apparatus"],
+    why: "Rituals give big world effects. The brazier runs them.",
+    how: ["Craft the Ritual Brazier and place it.",
+          "Craft a Ritual Tablet (each ritual has its own) and right-click the brazier with it.",
+          "Some rituals need Source in a nearby jar or extra items tossed in."] },
+  { id: "ritual1", ch: "c6", title: "Perform your first ritual", requires: ["brazier"],
+    why: "Easy wins that save real time.",
+    how: ["Ritual of Sunrise or Moonfall sets the time of day.",
+          "Ritual of Cloudshaping changes the weather.",
+          "Ritual of Overgrowth grows crops and plants around it."] },
+  { id: "chimera", ch: "c6", title: "Defeat the Wilden Chimera", requires: ["brazier", "wilden", "armor1"], optional: true,
+    why: "The mod's boss fight. Its drops unlock some top-tier recipes.",
+    how: ["Look up the Chimera summoning ritual in the notebook. It uses Wilden drops.",
+          "Fight in a wide open area. It has several phases and summons spikes.",
+          "Bring healing spells, Blink to dodge, and Amplified Harm projectiles."],
+    tip: "Do this after you have mage armor and a strong combat spell." },
+
+  // ---- Chapter 7
+  { id: "archmage", ch: "c7", title: "Upgrade to the Archmage Spell Book", requires: ["apprentice", "glyphs2"],
+    why: "Unlocks Tier 3 glyphs and the most spell slots.",
+    how: ["Put the Apprentice book on the apparatus as the center item.",
+          "Load the pedestals with what JEI lists. Expect rare items (end-game materials like ender pearls, emeralds or a nether star, depending on version).",
+          "Your spells transfer over."] },
+  { id: "glyphs3", ch: "c7", title: "Unlock Tier 3 glyphs", requires: ["archmage"],
+    why: "The strongest glyphs in the mod.",
+    how: ["Check the Scribe's Table with your Archmage book.",
+          "Look for Wall and Linger forms, Fangs, Lightning and the higher augments.",
+          "Build an end-game spell set: area mining, a big damage spell and a teleport or flight spell."] },
+  { id: "armor_up", ch: "c7", title: "Upgrade mage armor to the top tier", requires: ["armor1", "archmage"],
+    why: "More mana, more regen and better spell discounts.",
+    how: ["Upgrade each armor piece on the apparatus (JEI shows each upgrade step).",
+          "In newer versions you can add perks to armor with Threads at the Alteration Table."] },
+  { id: "mana_ench", ch: "c7", title: "Add Mana Regen and Mana Boost enchants", requires: ["first_apparatus"], optional: true,
+    why: "Even more mana for long fights and big area spells.",
+    how: ["These enchantments are applied on the Enchanting Apparatus, not an enchanting table.",
+          "Put the armor piece in the center and the listed items on the pedestals."] },
+  { id: "turret", ch: "c7", title: "Automate with Spell Turrets", requires: ["glyphs2"], optional: true,
+    why: "Turrets cast a stored spell when they get a redstone signal. Great for farms and defense.",
+    how: ["Inscribe a spell onto Spell Parchment at the Scribe's Table.",
+          "Craft a Spell Turret and right-click it with the parchment.",
+          "Give it a redstone pulse and a Source supply. Touch + Break turrets make simple auto-miners."] }
+];
+
+const byId = Object.fromEntries(STEPS.map(s => [s.id, s]));
+const chName = Object.fromEntries(CHAPTERS.map(c => [c.id, c.name]));
+let done = {};
+let openIds = new Set();
+let storeMode = "local"; // "local" | "account"
+let progressDoc = null;
+
+function loadLocal() {
+  try { const v = JSON.parse(localStorage.getItem("ars-path-done") || "{}"); if (v && typeof v === "object") return v; } catch (e) {}
+  return {};
+}
+function saveLocal() { try { localStorage.setItem("ars-path-done", JSON.stringify(done)); } catch (e) {} }
+
+let saveTimer = null, saving = false, pending = false;
+function scheduleSave() {
+  saveLocal();
+  if (!progressDoc) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flush, 700);
+}
+async function flush() {
+  if (saving) { pending = true; return; }
+  saving = true; setSave("Saving…");
+  try {
+    await progressDoc.set({ done: Object.keys(done).filter(k => done[k] && byId[k]) });
+    setSave("<b>Saved</b> to your account");
+  } catch (e) {
+    setSave("Couldn't save to your account. Saved in this browser.");
+  }
+  saving = false;
+  if (pending) { pending = false; flush(); }
+}
+function setSave(html) { document.getElementById("saveState").innerHTML = html; }
+
+const reqsMet = s => (s.requires || defaultReq(s)).every(r => done[r]);
+function defaultReq(s) {
+  // Within a chapter, steps without an explicit list follow nothing.
+  return [];
+}
+
+function nextSteps() {
+  const open = STEPS.filter(s => !done[s.id] && reqsMet(s));
+  const main = open.filter(s => !s.optional);
+  const side = open.filter(s => s.optional);
+  return main.concat(side).slice(0, 3);
+}
+
+function esc(t) { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+
+function detailHTML(s) {
+  return `<p class="why">${esc(s.why)}</p>
+    <ol class="how">${s.how.map(h => `<li>${esc(h)}</li>`).join("")}</ol>
+    ${s.tip ? `<p class="tip"><b>Tip:</b> ${esc(s.tip)}</p>` : ""}`;
+}
+
+function render() {
+  const total = STEPS.length;
+  const count = STEPS.filter(s => done[s.id]).length;
+  const pct = Math.round(count / total * 100);
+  document.getElementById("meterFill").style.width = pct + "%";
+  document.getElementById("meter").setAttribute("aria-valuenow", pct);
+  document.getElementById("meterText").textContent = `${count} / ${total} steps · ${pct}%`;
+
+  const grid = document.getElementById("nextGrid");
+  const next = nextSteps();
+  if (!next.length) {
+    grid.innerHTML = `<div class="alldone"><h3>You've walked the whole path.</h3><p>Every step is checked off. From here, experiment with glyph combos and the addon mods in your pack.</p></div>`;
+  } else {
+    grid.innerHTML = next.map((s, i) => `
+      <article class="card${i === 0 ? " primary" : ""}">
+        <div class="card-top">
+          <span class="label">${i === 0 ? "Do this now" : "Also available"} · ${esc(chName[s.ch])}</span>
+          ${s.optional ? `<span class="pill opt">Side quest</span>` : ""}
+        </div>
+        <h3>${esc(s.title)}</h3>
+        ${detailHTML(s)}
+        <div class="act"><button class="btn go" type="button" data-done="${s.id}">Mark done</button></div>
+      </article>`).join("");
+  }
+
+  const list = document.getElementById("chapterList");
+  list.innerHTML = CHAPTERS.map((c, ci) => {
+    const steps = STEPS.filter(s => s.ch === c.id);
+    const cDone = steps.filter(s => done[s.id]).length;
+    return `<div class="chapter">
+      <div class="ch-head"><span class="label">Chapter ${ci + 1}</span><h3>${esc(c.name)}</h3><span class="label">${cDone}/${steps.length}</span></div>
+      <p class="ch-blurb">${esc(c.blurb)}</p>
+      <ul class="steps">${steps.map(stepHTML).join("")}</ul>
+    </div>`;
+  }).join("");
+}
+
+function stepHTML(s) {
+  const isDone = !!done[s.id];
+  const missing = (s.requires || []).filter(r => !done[r]).map(r => byId[r].title);
+  const sub = isDone ? "Done" : missing.length ? `<span class="needs">Needs: ${missing.map(esc).join(", ")}</span>` : "Ready to do";
+  const open = openIds.has(s.id);
+  return `<li class="step${isDone ? " done" : ""}">
+    <div class="step-row">
+      <input type="checkbox" id="cb-${s.id}" data-toggle="${s.id}" ${isDone ? "checked" : ""}>
+      <label class="s-main" for="cb-${s.id}"><span class="s-title">${esc(s.title)}</span><span class="s-sub">${sub}</span></label>
+      <span class="s-badges">${s.optional ? `<span class="pill opt">Side</span>` : ""}
+        <button class="expand" type="button" data-expand="${s.id}" aria-expanded="${open}">${open ? "Hide" : "Details"}</button></span>
+    </div>
+    ${open ? `<div class="s-detail">${detailHTML(s)}</div>` : ""}
+  </li>`;
+}
+
+document.addEventListener("click", e => {
+  const d = e.target.closest("[data-done]");
+  if (d) { done[d.dataset.done] = true; scheduleSave(); render(); return; }
+  const x = e.target.closest("[data-expand]");
+  if (x) { const id = x.dataset.expand; openIds.has(id) ? openIds.delete(id) : openIds.add(id); render(); return; }
+});
+document.addEventListener("change", e => {
+  const t = e.target.closest("[data-toggle]");
+  if (t) { if (t.checked) done[t.dataset.toggle] = true; else delete done[t.dataset.toggle]; scheduleSave(); render(); }
+});
+
+document.getElementById("hideDone").addEventListener("change", e => {
+  document.getElementById("chapterList").classList.toggle("hidden-done", e.target.checked);
+  try { localStorage.setItem("ars-path-hide", e.target.checked ? "1" : ""); } catch (err) {}
+});
+document.getElementById("expandAll").addEventListener("click", e => {
+  const allOpen = openIds.size === STEPS.length;
+  openIds = allOpen ? new Set() : new Set(STEPS.map(s => s.id));
+  e.target.textContent = allOpen ? "Expand all" : "Collapse all";
+  render();
+});
+
+const resetWrap = document.getElementById("resetWrap");
+function showResetButton() {
+  resetWrap.innerHTML = `<button class="btn danger" id="resetBtn" type="button">Reset progress</button>`;
+}
+resetWrap.addEventListener("click", e => {
+  if (e.target.id === "resetBtn") {
+    resetWrap.innerHTML = `<span class="confirm">Clear every checkmark? <button class="btn danger" id="resetYes" type="button">Yes, reset</button><button class="btn" id="resetNo" type="button">Cancel</button></span>`;
+  } else if (e.target.id === "resetYes") {
+    done = {}; scheduleSave(); render(); showResetButton();
+  } else if (e.target.id === "resetNo") {
+    showResetButton();
+  }
+});
+
+// Boot: render from this browser first, then switch to the account store when it answers.
+done = loadLocal();
+try { if (localStorage.getItem("ars-path-hide")) { document.getElementById("hideDone").checked = true; document.getElementById("chapterList").classList.add("hidden-done"); } } catch (e) {}
+render();
+
+(async () => {
+  if (!window.claude || !window.claude.use) return;
+  try {
+    const [db, user] = await Promise.all([claude.use("db"), claude.use("user")]);
+    if (!db || !user) return;
+    const uid = await user.id();
+    if (!uid) return;
+    progressDoc = db.collection("data/users/" + uid).doc("ars-progress");
+    const snap = await progressDoc.get();
+    if (snap.exists) {
+      const remote = (snap.data() || {}).done || [];
+      done = {};
+      remote.forEach(id => { if (byId[id]) done[id] = true; });
+      saveLocal();
+      render();
+    } else if (Object.keys(done).length) {
+      flush();
+    }
+    storeMode = "account";
+    setSave("<b>Saved</b> to your account");
+  } catch (e) {
+    progressDoc = null;
+  }
+})();
+</script>
