@@ -2,7 +2,15 @@
 
 Goal: a native iOS app that matches the customization and functionality of MTG.design: build a card from frame templates, edit every text field with inline mana symbols, place and crop art, pick set symbol and rarity, export print-quality images, and save, organize and share cards.
 
-> **Note on scope:** mtg.design could not be reached from the build environment (DNS blocked), so the feature list below is based on known MTG.design functionality and not a live audit. Before Phase 1 ends, spend about an hour on the live site and tick off the [Feature parity checklist](#feature-parity-checklist). Anything missing becomes a backlog item.
+> **Note on scope:** mtg.design's editor requires a login, so it has not been audited yet. Verified from public pages (2026-10-31):
+> - Cards export as **744 × 1039 JPG** (≈ 300 DPI at card size). Match this as the "standard" export, and offer a higher-res option.
+> - Modern (M15-style) frames with textured color frames, gold multicolor, holo foil stamp at the bottom center.
+> - Full collector info block: `collector# / set total`, rarity letter (C/U/R/M), "Not For Sale" (or similar) line, `SET • LANG`, artist with brush icon, designer credit ("NAME • MTG.Design"), copyright line.
+> - **Custom set symbols** (e.g. a pumpkin icon) tinted by rarity; set codes (e.g. `MOX`).
+> - Flavor text with a divider line; rules text auto-fits.
+> - Community features: public card gallery, themed events (e.g. "Moxtober" daily prompts with submission to an event), share links, user accounts, Patreon early-access features.
+>
+> Anything behind the login (exact frame list, editor options) still needs checking via screenshots.
 
 ---
 
@@ -113,6 +121,7 @@ The riskiest part is getting a card to *look right*, so start there.
 
 ### Phase 2: The editor MVP (3 weeks)
 - [ ] Editor screen: live preview on top, form/inspector below (iPhone); side-by-side on iPad
+- [ ] Collector info block: number/total, rarity letter, "Not For Sale" line, set code • language, artist (brush icon), designer credit, copyright line, holo stamp toggle
 - [ ] Fields: title, mana cost (with a **symbol keyboard / palette** so nobody has to type braces), type line, rules text, flavor text, P/T, artist, designer, collector number
 - [ ] Frame picker: color (W/U/B/R/G, multicolor gold, two-color hybrid, artifact, colorless, land with color identity)
 - [ ] **Auto-detect frame color from the mana cost**, with a manual override
@@ -145,7 +154,7 @@ One `LayoutSpec` plus frame art per item:
 - **Exit criterion:** every frame on the parity checklist renders correctly and has a snapshot test.
 
 ### Phase 4: Export, print and sharing (2 weeks)
-- [ ] Export resolutions: screen (e.g. 745×1040), high (1500×2100), print (600 DPI with **3 mm bleed** and optional rounded/square corners)
+- [ ] Export resolutions: standard 744×1039 JPG (matches mtg.design), high (1500×2100), print (600 DPI with **3 mm bleed** and optional rounded/square corners)
 - [ ] PNG / JPEG / PDF export
 - [ ] **Print sheets**: 3×3 cards on Letter/A4 PDF with cut marks (proxy printing)
 - [ ] Share sheet: Messages, Discord, save to Files, etc.
