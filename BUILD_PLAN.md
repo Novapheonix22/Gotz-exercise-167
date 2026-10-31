@@ -6,19 +6,21 @@ Goal: a native iOS app that matches the customization and functionality of MTG.d
 
 ---
 
-## 0. Read this first: legal and App Store risk
+## 0. Distribution and assets (personal use)
 
-This is the biggest risk to the project, ahead of any engineering problem.
+This app is for personal use and a few friends. It will not go on the App Store, so App Store review and monetization rules don't apply. The plan uses the authentic look directly.
 
-- **Frames, fonts and symbols are Wizards of the Coast IP.** The official frame art, the Beleren/Matrix/MPlantin fonts, the mana and set symbols, and the "Magic: The Gathering" name all belong to Wizards. MTG.design is a website and gets less scrutiny. An App Store app that ships those assets is likely to be rejected under **Guideline 5.2 (Intellectual Property)**, or taken down after a complaint.
-- **WotC Fan Content Policy:** fan content must be free to access. You cannot sell it or put it behind a paywall, and you must include the required disclaimer. That rules out a paid app or paid unlocks if you rely on the policy.
-- **Recommended approach (decide before Phase 2):**
-  1. Ship **original frame artwork** in the familiar layout (title bar, art box, type line, text box, P/T box), drawn by you or a commissioned artist.
-  2. Use **open-licensed fonts** with a similar feel (e.g. a serif display face for titles and a readable book face for rules text, all OFL).
-  3. Draw an **original mana/cost symbol set**, or use an OFL symbol font and check its license terms yourself.
-  4. Keep the name and marketing generic ("Fantasy Card Maker"). Do not use "Magic" or "MTG" in the app name.
-  5. Optional: let users **import their own frame packs and fonts** (Phase 5). That gives power users the authentic look without you distributing WotC assets.
-- Have a lawyer spend an hour on this before you submit to the App Store.
+**Getting the app onto phones:**
+- **Free Apple ID + Xcode:** build straight to your own iPhone. The app expires after **7 days** and you re-run it from Xcode to renew. Fine if it's just you.
+- **Paid Apple Developer account ($99/yr):** builds last a year, and you can share with friends by **Ad Hoc** (register their device IDs, up to 100) or **TestFlight** (send an invite link; builds last 90 days). TestFlight is the least hassle for friends.
+- Alternative for friends without Xcode: AltStore/SideStore (refreshes the 7-day signing over Wi-Fi).
+
+**Asset sources (authentic look):**
+- **Mana and other symbols:** the open-source *Mana* icon font (andrewgioia/mana) covers mana, tap, loyalty, saga chapters and more.
+- **Set symbols:** the *Keyrune* font (andrewgioia/keyrune), plus custom image upload.
+- **Fonts:** Beleren (titles, type line), MPlantin (rules text), Beleren Small Caps (artist line), Matrix (older frames). Bundle them in the app.
+- **Frame images:** high-res frame PNGs from the custom-card community (e.g. the frame packs used by open-source card makers like Card Conjurer). Store them as asset catalogs with a `LayoutSpec` JSON per frame.
+- Because nothing is sandboxed by App Review, you can also add a "frame pack" import (a ZIP of PNGs + JSON) to add frames later without rebuilding.
 
 ---
 
@@ -100,7 +102,7 @@ Rough estimates assume one experienced iOS developer working full time. Double t
 ### Phase 1: Foundations and the rendering spike (2 weeks)
 The riskiest part is getting a card to *look right*, so start there.
 - [ ] Xcode project, SwiftUI app shell, SwiftData container, CI (Xcode Cloud or GitHub Actions)
-- [ ] Draft **original** standard creature frame art in 5 colors + gold + artifact + land (placeholder quality is fine)
+- [ ] Gather frame PNGs for the standard creature frame (5 colors, gold, artifact, land) and bundle Beleren, MPlantin, Mana and Keyrune fonts
 - [ ] `LayoutSpec` JSON format + loader
 - [ ] `CardRenderer` v0: frame, title, mana cost, art box, type line, rules text, P/T, rarity-colored set symbol
 - [ ] `SymbolParser`: `{W} {U} {B} {R} {G} {C} {X} {0-20} {T} {Q} {S} {E}`, hybrid `{W/U}`, Phyrexian `{W/P}`, two-hybrid `{2/W}`
@@ -157,7 +159,7 @@ One `LayoutSpec` plus frame art per item:
 - [ ] Templates and "start from duplicate"
 - [ ] iCloud sync through CloudKit
 - [ ] iPad: multi-window, keyboard shortcuts, Apple Pencil drag for art positioning, drag-and-drop images in
-- [ ] Custom fonts and frame packs import (see the legal note)
+- [ ] Frame pack import (ZIP of PNGs + LayoutSpec JSON) and custom font import
 - [ ] Accessibility: Dynamic Type in the editor (not on the card itself), VoiceOver labels, symbol palette with accessible names
 - [ ] Localization of the app UI
 
@@ -166,16 +168,14 @@ This matches the website's public card gallery. Only build it if you want a soci
 - [ ] Sign in with Apple
 - [ ] Publish a card to a public gallery, with a link to view it on the web
 - [ ] Browse / search / like / comment
-- [ ] **Moderation**: report button, block users, content filtering. App Store Guideline 1.2 *requires* these for user-generated content
 - [ ] Rate limiting, image size limits, storage costs plan
 
 ### Phase 7: Polish and launch (2 weeks)
 - [ ] Onboarding (sample cards, a "make your first card" walkthrough)
 - [ ] Performance: render the preview on a background thread, cache frame assets, keep editing smooth at 60fps on older devices
 - [ ] Crash reporting and privacy-friendly analytics
-- [ ] App Store assets, privacy nutrition label, Fan Content disclaimer (if used)
-- [ ] TestFlight beta with real players, especially to check that text fits well on dense cards
-- [ ] Submit
+- [ ] App icon and launch screen
+- [ ] Share builds with friends via TestFlight or Ad Hoc (see §0), and get feedback on text fit for dense cards
 
 **Total estimate:** about 15 to 18 weeks to a feature-complete v1 without the community gallery, and about 20+ weeks with it.
 
@@ -218,6 +218,6 @@ Verify each item against the live mtg.design site and mark it ✅ (have), ⏳ (p
 
 ## 6. Suggested next steps
 
-1. Decide how to handle the legal/asset question (§0). It determines your art budget and monetization.
-2. Start the Phase 1 rendering spike: one creature card that looks right.
-3. Commission or draw the first original frame set while the engine is being built.
+1. Decide between a free Apple ID (7-day re-signing) and the $99/yr developer account (see §0).
+2. Collect the fonts and the first frame set.
+3. Start the Phase 1 rendering spike: one creature card that looks right.
