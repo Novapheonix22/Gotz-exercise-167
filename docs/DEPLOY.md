@@ -4,11 +4,11 @@ About 15 minutes, once. After that, every push to the branch updates the live si
 
 ## 1. Supabase (accounts and saved cards)
 
-1. Go to https://supabase.com/dashboard → **New project**. Name it e.g. `card-maker`, pick a region near you, set a database password (save it somewhere), and create it.
+1. Go to https://supabase.com/dashboard → **New project**. Name it `Spellcraft`, pick a region near you, set a database password (save it somewhere), and create it.
 2. When it's ready, open **SQL Editor** → **New query**, paste the whole of `web/supabase/migrations/0001_init.sql`, and click **Run**. This creates the tables, makes every person's data private to them, and adds private storage for art.
 3. **Make it invite-only:** **Authentication → Sign In / Providers** → turn **off** "Allow new users to sign up". (Email sign-in stays on.)
 4. **Settings → API** (or **Project Settings → Data API**): copy the **Project URL** and the **anon public** key. You'll paste them into Vercel.
-5. After Vercel gives you the site address (step 2 below): **Authentication → URL Configuration** → set **Site URL** to that address (e.g. `https://card-maker-xyz.vercel.app`) and add it under **Redirect URLs** too. Invite and password-reset emails link there.
+5. After Vercel gives you the site address (step 2 below): **Authentication → URL Configuration** → set **Site URL** to that address (e.g. `https://spellcraft-xyz.vercel.app`) and add it under **Redirect URLs** too. Invite and password-reset emails link there.
 
 ## 2. Vercel (the website)
 

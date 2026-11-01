@@ -1,4 +1,4 @@
--- Card Maker: initial schema.
+-- Spellcraft: initial schema.
 -- Run once in the Supabase SQL editor (or with the Supabase CLI).
 -- Every table uses row level security so people only ever see their own data.
 

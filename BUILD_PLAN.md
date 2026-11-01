@@ -1,4 +1,4 @@
-# Custom Card Maker (Web App): Build Plan
+# Spellcraft: Build Plan
 
 **What it's for:** making custom cards (e.g. commanders) to play online with friends, mainly on untap.in. Not for printing.
 

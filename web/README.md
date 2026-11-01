@@ -1,6 +1,6 @@
-# Card Maker (web app)
+# Spellcraft (web app)
 
-Mobile-first custom card maker. See `../BUILD_PLAN.md` for the full plan.
+Spellcraft: a mobile-first custom card maker. See `../BUILD_PLAN.md` for the full plan.
 
 ## Run it
 
