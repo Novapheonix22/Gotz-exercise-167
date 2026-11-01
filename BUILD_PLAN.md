@@ -155,7 +155,7 @@ Creating a card is a short guided setup, then a simple form. The in-depth editor
    |---|---|
    | Normal | Regular, Land, Vehicle, Colorshifted |
    | Double-faced | Transform, Modal DFC (then front/back and the transform icon) |
-   | Adventure · Omen · Prepare | Adventure (or reversed), Omen, Prepare |
+   | Adventure · Omen · Prepare | Adventure, Omen, Prepare |
    | Two halves | Split, Fuse, Aftermath, Flip, Room |
    | Planeswalker | Regular, Tall, Borderless, Extended Art, Compleated, Transform, MDFC |
    | Saga · Class · Case | Saga, Saga Creature, Class, Case (all split down the middle) |
@@ -165,7 +165,7 @@ Creating a card is a short guided setup, then a simple form. The in-depth editor
    | Showcase & full art | Borderless, Extended Art, Full Art, Etched, Nickname-style showcases, set showcases |
    | Other mechanics | Mutate, Prototype, Spree, Attraction, Conspiracy |
    | Old frames | Alpha, 4th, 5th, 7th, 8th Edition |
-2. **Style and frame:** pick the style within the family (skipped choice if there's only one, e.g. Battle), plus every toggle that changes the frame: Legendary (none / legend crown / floating crown), Nickname, Snow, Devoid, Enchantment (Nyx), Miracle, style-specific ones like "Adventure on the right" (MTG.design's Adventure Reversed), frame color (auto from mana cost, or pick) and border. Toggles the chosen style has no frames for are hidden (e.g. no Legendary on Fuse or Battle). Cosmetic extras like the **holo stamp are always on** by default (removable in the in-depth editor), not asked about.
+2. **Style and frame:** pick the style within the family (skipped choice if there's only one, e.g. Battle), plus every toggle that changes the frame: Legendary (none / legend crown / floating crown), Nickname, Snow, Devoid, Enchantment (Nyx), Miracle, frame color (auto from mana cost, or pick) and border. Toggles the chosen style has no frames for are hidden (e.g. no Legendary on Fuse or Battle). Cosmetic extras like the **holo stamp are always on** by default (removable in the in-depth editor), not asked about.
 3. **Fill in the boxes:** the MTG.design-style form, showing only the fields that style needs (e.g. Adventure adds the adventure spell's name, cost, type and text). **Done** saves; **Customize in depth** opens the layer editor.
 
 Under the hood, steps 1–2 pick a Card Conjurer frame pack plus the add-on layers, and step 3 fills the text boxes. The family/style table lives in one JSON file, so new frames can be added to the picker without code changes.
@@ -205,6 +205,7 @@ One `LayoutSpec` + PNG set each. The editor shows the matching extra fields, lik
 - [ ] **Custom sets**: set code, name, symbol, total; library grouped as "Ungrouped Cards" + one section per set (like the site's dashboard)
 - [ ] Auto-fill `#`/Total/Set/symbol when you add a card to a set
 - [ ] Higher-res export (1488 × 2078) and PNG, in addition to the 744 × 1039 JPG
+- [ ] **Untap (untap.in) export**: one-tap export in whatever form Untap accepts for custom cards (to check: image upload vs. image URL in a deck list). If it needs URLs, add an image hosting option.
 - [ ] Export a whole set as images; share a card as an editable file (`.card` with embedded art) so friends with the app can open and remix it. This replaces the site's share link.
 - [ ] Search/filter by name, color, type, rarity, set
 
@@ -231,6 +232,7 @@ Each pack = PNGs + manifest + snapshot test. Order:
 - [ ] Not planned unless asked: Flesh and Blood frames
 
 ### Phase 7: Extras (optional)
+- [ ] **Mirror layout** switch: flip the frame images and move every text box, mana cost and P/T to the opposite side (left-handed style cards)
 - [ ] **Prompt challenges** like MTG.design's Moxtober
 - [ ] iCloud sync between devices
 - [ ] iPad niceties: keyboard shortcuts, drag-and-drop art
