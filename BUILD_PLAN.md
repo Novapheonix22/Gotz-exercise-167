@@ -1,6 +1,6 @@
 # iOS Custom Card Maker: Build Plan
 
-Goal: a native iOS app with the customization and functionality of **MTG.design** (the simple, form-based editor) **plus Card Conjurer** (cardconjurer.app: hundreds of frame packs, layered frames, free-form text boxes). It's for personal use (and maybe a few friends), installed from Xcode rather than the App Store.
+Goal (for making custom cards, e.g. commanders, to play online with friends; not for printing): a native iOS app with the customization and functionality of **MTG.design** (the simple, form-based editor) **plus Card Conjurer** (cardconjurer.app: hundreds of frame packs, layered frames, free-form text boxes). It's for personal use (and maybe a few friends), installed from Xcode rather than the App Store.
 
 Reference inventories:
 - [`docs/mtg-design-inventory.md`](docs/mtg-design-inventory.md): every MTG.design editor option.
@@ -35,7 +35,7 @@ The approach: **MTG.design's ease of use on top, Card Conjurer's power underneat
 | Storage | **SwiftData**, art stored as files on disk | Local, simple, no server |
 | Sync (optional) | CloudKit through SwiftData | Free iPhone ↔ iPad sync if you want it later |
 | Images | `PhotosPicker`, Files picker, URL download | Covers MTG.design's "Artwork URL" and "Upload File" |
-| Export | `UIGraphicsImageRenderer` → JPG/PNG, `UIGraphicsPDFRenderer` → print sheets | Native |
+| Export | `UIGraphicsImageRenderer` → JPG/PNG | Native |
 | Sharing | `ShareLink` (system share sheet) | Replaces the site's "Save & Share" link |
 | Tests | XCTest + snapshot tests (swift-snapshot-testing) | Rendering bugs are the main risk |
 | Appearance | Light, Dark, or follow System (`preferredColorScheme`) | Dark mode for the whole app UI; the card render itself always looks the same |
@@ -59,7 +59,7 @@ App
 │   ├── Simple mode     MTG.design-style form; picks a preset that builds the layer stack for you
 │   └── Advanced mode   Card Conjurer-style: layer list, masks, text box bounds, per-element X/Y/scale
 ├── Library         cards grouped by "Ungrouped" and by custom set
-└── Export          JPG/PNG/PDF, print sheets, share
+└── Export          JPG/PNG, share
 ```
 
 **Rules:**
@@ -165,7 +165,7 @@ Creating a card is a short guided setup, then a simple form. The in-depth editor
    | Showcase & full art | Borderless, Extended Art, Full Art, Etched, Nickname-style showcases, set showcases |
    | Other mechanics | Mutate, Prototype, Spree, Attraction, Conspiracy |
    | Old frames | Alpha, 4th, 5th, 7th, 8th Edition |
-2. **Style and frame:** pick the style within the family (skipped choice if there's only one, e.g. Battle), plus every toggle that changes the frame: Legendary (none / legend crown / floating crown), Nickname, Snow, Devoid, Enchantment (Nyx), Miracle, Holo stamp, style-specific ones like "spell on the right side", frame color (auto from mana cost, or pick) and border. Toggles the chosen style has no frames for are hidden (e.g. no Legendary on Fuse or Battle).
+2. **Style and frame:** pick the style within the family (skipped choice if there's only one, e.g. Battle), plus every toggle that changes the frame: Legendary (none / legend crown / floating crown), Nickname, Snow, Devoid, Enchantment (Nyx), Miracle, style-specific ones like "Adventure on the right" (MTG.design's Adventure Reversed), frame color (auto from mana cost, or pick) and border. Toggles the chosen style has no frames for are hidden (e.g. no Legendary on Fuse or Battle). Cosmetic extras like the **holo stamp are always on** by default (removable in the in-depth editor), not asked about.
 3. **Fill in the boxes:** the MTG.design-style form, showing only the fields that style needs (e.g. Adventure adds the adventure spell's name, cost, type and text). **Done** saves; **Customize in depth** opens the layer editor.
 
 Under the hood, steps 1–2 pick a Card Conjurer frame pack plus the add-on layers, and step 3 fills the text boxes. The family/style table lives in one JSON file, so new frames can be added to the picker without code changes.
@@ -205,7 +205,6 @@ One `LayoutSpec` + PNG set each. The editor shows the matching extra fields, lik
 - [ ] **Custom sets**: set code, name, symbol, total; library grouped as "Ungrouped Cards" + one section per set (like the site's dashboard)
 - [ ] Auto-fill `#`/Total/Set/symbol when you add a card to a set
 - [ ] Higher-res export (1488 × 2078) and PNG, in addition to the 744 × 1039 JPG
-- [ ] **Print sheet PDF**: 3×3 cards on Letter/A4 with cut marks, for proxies
 - [ ] Export a whole set as images; share a card as an editable file (`.card` with embedded art) so friends with the app can open and remix it. This replaces the site's share link.
 - [ ] Search/filter by name, color, type, rarity, set
 
