@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { frameProperties, orderedColors } from './frameResolver';
+import { frameProperties, landColors, orderedColors } from './frameResolver';
 
 describe('orderedColors', () => {
   it('uses the standard left/right order for pairs', () => {
@@ -29,5 +29,25 @@ describe('frameProperties', () => {
   });
   it('vehicle', () => {
     expect(frameProperties([], '{2}', 'Artifact — Vehicle', true)).toMatchObject({ frame: 'V', pt: 'V' });
+  });
+});
+
+describe('lands', () => {
+  it('colored land uses land-colored parts', () => {
+    expect(frameProperties(['G'], '', 'Land', false)).toMatchObject({ frame: 'L', rules: 'GL', typeTitle: 'GL', pinline: 'GL' });
+  });
+  it('two-color land splits rules with land colors', () => {
+    expect(frameProperties(['R', 'G'], '', 'Land', false)).toMatchObject({ rules: 'RL', rulesRight: 'GL', typeTitle: 'L' });
+  });
+  it('colorless land', () => {
+    expect(frameProperties([], '', 'Land', false)).toMatchObject({ frame: 'L', rules: 'L', typeTitle: 'L' });
+  });
+});
+
+describe('landColors', () => {
+  it('reads Add abilities and basic types', () => {
+    expect(landColors('{T}: Add {R} or {G}.', 'Land')).toEqual(['R', 'G']);
+    expect(landColors('', 'Land — Forest Island')).toEqual(['U', 'G']);
+    expect(landColors('{T}: Add {C}.', 'Land')).toEqual([]);
   });
 });

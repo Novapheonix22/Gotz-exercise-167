@@ -13,15 +13,25 @@ export const CARD_H = 2814;
 // ---------- assets ----------
 
 const images = new Map<string, Promise<HTMLImageElement>>();
+
+/** Turns "storage:<path>" references into a loadable URL. Set by the app once signed in. */
+let resolveRef: (ref: string) => Promise<string> = async (ref) => ref;
+export function setImageResolver(fn: (ref: string) => Promise<string>) { resolveRef = fn; }
+
 export function loadImage(src: string): Promise<HTMLImageElement> {
   if (!images.has(src)) {
-    images.set(src, new Promise((resolve, reject) => {
-      const img = new Image();
-      img.decoding = 'async';
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Could not load ${src}`));
-      img.src = src;
-    }));
+    images.set(src, (async () => {
+      const url = src.startsWith('storage:') ? await resolveRef(src) : src;
+      return new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.decoding = 'async';
+        // Keep the canvas exportable when images come from another site (e.g. Supabase storage).
+        if (/^https?:/.test(url)) img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => { images.delete(src); reject(new Error(`Could not load image`)); };
+        img.src = url;
+      });
+    })());
   }
   return images.get(src)!;
 }
@@ -136,6 +146,8 @@ interface DrawTextOptions {
   cardName?: string;
   /** Override the box width (e.g. to leave room for the mana cost). */
   width?: number;
+  /** Soft drop shadow behind text (canvas shadow). */
+  textShadow?: { x: number; y: number };
   /** Inner padding as a fraction of card height. */
   padTop?: number;
   padBottom?: number;
@@ -158,6 +170,11 @@ async function drawTextBox(ctx: CanvasRenderingContext2D, spec: TextBoxSpec, tex
   ctx.save();
   ctx.fillStyle = o.color ?? '#000';
   ctx.textBaseline = 'alphabetic';
+  if (o.textShadow) {
+    ctx.shadowColor = '#000';
+    ctx.shadowOffsetX = o.textShadow.x;
+    ctx.shadowOffsetY = o.textShadow.y;
+  }
   for (const line of layout.lines) {
     for (const item of line.items) {
       if (item.kind === 'text') {
@@ -198,9 +215,88 @@ function manaCostWidth(cost: string, spec: TextBoxSpec) {
 
 // ---------- card ----------
 
-export interface RenderOptions { scale?: number }
+export interface RenderOptions {
+  scale?: number;
+  /** Set symbol image reference to use when the card has none of its own (from its set). */
+  setSymbol?: string;
+}
+
+const NICKNAME_TRUE_NAME: TextBoxSpec = {
+  x: 0.14, y: 0.1129, width: 0.72, height: 0.0243, oneLine: true, font: 'mplantini', size: 0.0229, align: 'center',
+};
+
+const RARITY_FILL: Record<string, [string, string] | string> = {
+  C: '#111111',
+  U: ['#6b7a85', '#d7e0e6'],
+  R: ['#8a6a1f', '#f1d68d'],
+  M: ['#b33a12', '#f5a04a'],
+  S: ['#5a2d7a', '#c89be3'],
+  P: ['#5a2d7a', '#c89be3'],
+  L: '#111111',
+  T: '#111111',
+};
+
+/** Draws the set symbol right-aligned on the type line. Returns the width used (0 if none). */
+async function drawSetSymbol(ctx: CanvasRenderingContext2D, card: Card, ref: string | undefined, b?: Bounds & { horizontal?: string }) {
+  if (!ref || !b) return 0;
+  const img = await loadImage(ref).catch(() => null);
+  if (!img || !img.naturalWidth) return 0;
+  const h = b.height * CARD_H;
+  const maxW = b.width * CARD_W;
+  let w = h * (img.naturalWidth / img.naturalHeight);
+  let dh = h;
+  if (w > maxW) { dh = h * (maxW / w); w = maxW; }
+  const right = b.x * CARD_W;
+  const x = right - w;
+  const y = b.y * CARD_H - dh / 2;
+
+  if (!card.tintSymbol) {
+    ctx.drawImage(img, x, y, w, dh);
+    return w;
+  }
+  // Color by rarity with an outline, like printed set symbols.
+  const pad = Math.ceil(h * 0.12);
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(w + pad * 2);
+  c.height = Math.ceil(dh + pad * 2);
+  const g = c.getContext('2d')!;
+  const outline = document.createElement('canvas');
+  outline.width = c.width;
+  outline.height = c.height;
+  const o = outline.getContext('2d')!;
+  const stroke = Math.max(2, h * 0.06);
+  for (let a = 0; a < 16; a++) {
+    const ang = (a / 16) * Math.PI * 2;
+    o.drawImage(img, pad + Math.cos(ang) * stroke, pad + Math.sin(ang) * stroke, w, dh);
+  }
+  o.globalCompositeOperation = 'source-in';
+  o.fillStyle = card.rarity === 'C' || card.rarity === 'L' || card.rarity === 'T' ? '#ffffff' : '#000000';
+  o.fillRect(0, 0, outline.width, outline.height);
+  g.drawImage(outline, 0, 0);
+
+  const fillCanvas = document.createElement('canvas');
+  fillCanvas.width = c.width;
+  fillCanvas.height = c.height;
+  const f = fillCanvas.getContext('2d')!;
+  f.drawImage(img, pad, pad, w, dh);
+  f.globalCompositeOperation = 'source-in';
+  const fill = RARITY_FILL[card.rarity] ?? '#111111';
+  if (typeof fill === 'string') f.fillStyle = fill;
+  else {
+    const grad = f.createLinearGradient(0, pad, 0, pad + dh);
+    grad.addColorStop(0, fill[1]);
+    grad.addColorStop(0.5, fill[0]);
+    grad.addColorStop(1, fill[1]);
+    f.fillStyle = grad;
+  }
+  f.fillRect(0, 0, fillCanvas.width, fillCanvas.height);
+  g.drawImage(fillCanvas, 0, 0);
+  ctx.drawImage(c, x - pad, y - pad);
+  return w;
+}
 
 export async function renderCard(canvas: HTMLCanvasElement, card: Card, packs: Packs, opts: RenderOptions = {}) {
+  const symbolRef = card.setSymbol || opts.setSymbol;
   await loadFonts();
   const version = packs.regular.version!;
   const layers = buildLayers(card, packs);
@@ -210,6 +306,7 @@ export async function renderCard(canvas: HTMLCanvasElement, card: Card, packs: P
   for (const m of `${card.rulesText} ${card.flavorText}`.matchAll(/\{([^}]+)\}/g)) symbolFiles.add(m[1]);
   await Promise.all([...symbolFiles].map((f) => loadImage(symbolSrc(f)).catch(() => null)));
   if (card.art) await loadImage(card.art.src).catch(() => null);
+  if (symbolRef) await loadImage(symbolRef).catch(() => null);
 
   const scale = opts.scale ?? 1;
   const off = document.createElement('canvas');
@@ -238,9 +335,20 @@ export async function renderCard(canvas: HTMLCanvasElement, card: Card, packs: P
     const manaLeft = (t.mana?.width ?? 0.93) * CARD_W - manaCostWidth(card.manaCost, t.mana ?? {});
     const titleX = (t.title.x ?? 0) * CARD_W;
     const width = Math.min((t.title.width ?? 1) * CARD_W, manaLeft - titleX - CARD_W * 0.01);
-    await drawTextBox(ctx, t.title, card.name, { width });
+    // With a nickname, the big title shows the nickname and the true name goes underneath (Card Conjurer's layout).
+    const nick = card.toggles.nickname && card.nickname.trim();
+    await drawTextBox(ctx, t.title, nick ? card.nickname : card.name, { width });
+    if (nick && card.name.trim()) {
+      await drawTextBox(ctx, NICKNAME_TRUE_NAME, card.name, {
+        color: '#fff', shadow: undefined, textShadow: { x: 0.0014 * CARD_W, y: 0.001 * CARD_H },
+      });
+    }
   }
-  if (t.type) await drawTextBox(ctx, t.type, typeLine(card), { width: (t.type.width ?? 1) * CARD_W * 0.9 });
+  const symbolWidth = await drawSetSymbol(ctx, card, symbolRef, version.setSymbolBounds);
+  if (t.type) {
+    const full = (t.type.width ?? 1) * CARD_W;
+    await drawTextBox(ctx, t.type, typeLine(card), { width: full - (symbolWidth ? symbolWidth + CARD_W * 0.012 : 0) });
+  }
   if (t.rules) {
     const body = card.flavorText.trim() ? `${card.rulesText}{flavor}${card.flavorText}` : card.rulesText;
     const hasPT = !!(card.power.trim() || card.toughness.trim());
