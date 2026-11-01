@@ -34,6 +34,7 @@ The full list of what MTG.design offers, taken from its logged-in editor, is in 
 | Export | `UIGraphicsImageRenderer` → JPG/PNG, `UIGraphicsPDFRenderer` → print sheets | Native |
 | Sharing | `ShareLink` (system share sheet) | Replaces the site's "Save & Share" link |
 | Tests | XCTest + snapshot tests (swift-snapshot-testing) | Rendering bugs are the main risk |
+| Appearance | Light, Dark, or follow System (`preferredColorScheme`) | Dark mode for the whole app UI; the card render itself always looks the same |
 
 ---
 
@@ -135,6 +136,7 @@ Getting one card to look right is the riskiest part, so it comes first.
 
 ### Phase 2: Editor at site parity for normal cards (3 weeks)
 - [ ] Editor screen: live preview on top, form below (iPhone); side by side on iPad
+- [ ] **Dark mode**: semantic colors throughout, an Appearance setting (System / Light / Dark), amber accent tuned for contrast in both modes. Mockups: https://claude.ai/artifact/9k5AcW5Xtw3MqdMfEBkK3U
 - [ ] Every field from the site's form: `#`, Total, Set, Lang, Designer, Name, Mana Cost, Super / Type (full dropdown) / Sub, Rarity (all 8), Artist, Rules Text, Flavor Text, Power, Tough
 - [ ] Mana symbol keyboard bar so you don't have to type braces on a phone
 - [ ] **Frame resolution** from mana cost + Type: mono, gold, hybrid, artifact, land, **enchantment/Nyx** variants, Color Indicator dot
