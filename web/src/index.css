@@ -91,6 +91,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .mana-key.text { font-size: 18px; color: var(--text2); }
 
 .segmented { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; background: var(--raised); border-radius: 12px; }
+.segmented.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .segmented button { min-height: 40px; border: 0; border-radius: 9px; background: transparent; font-size: 14px; font-weight: 500; cursor: pointer; }
 .segmented button.on { background: var(--surface); font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
 

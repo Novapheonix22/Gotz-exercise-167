@@ -181,10 +181,11 @@ export default function App() {
 
           <fieldset className="group">
             <legend>Frame</legend>
-            <div className="segmented" role="radiogroup" aria-label="Legendary">
-              {(['none', 'crown', 'floating'] as Legendary[]).map((v) => (
+            {/* The floating crown is made for borderless/extended-art frames, so regular frames only offer the standard crown. */}
+            <div className="segmented two" role="radiogroup" aria-label="Legendary">
+              {(['none', 'crown'] as Legendary[]).map((v) => (
                 <button key={v} type="button" role="radio" aria-checked={card.legendary === v} className={card.legendary === v ? 'on' : ''} onClick={() => set('legendary', v)}>
-                  {v === 'none' ? 'Not legendary' : v === 'crown' ? 'Legend crown' : 'Floating crown'}
+                  {v === 'none' ? 'Not legendary' : 'Legend crown'}
                 </button>
               ))}
             </div>

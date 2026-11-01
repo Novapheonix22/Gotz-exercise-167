@@ -54,7 +54,7 @@ export function newCard(): Card {
     flavorText: '"The thane hunts alone, and never goes hungry."',
     power: '2',
     toughness: '2',
-    legendary: 'floating',
+    legendary: 'crown',
     holoStamp: true,
     rarity: 'R',
     setCode: 'MOX',

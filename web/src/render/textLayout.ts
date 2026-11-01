@@ -174,18 +174,20 @@ export function layoutText(tokens: Token[], measure: Measure, o: LayoutOptions):
   const min = o.minSize ?? o.size * 0.35;
   let size = o.size;
   let r = attempt(tokens, measure, o, size);
-  while (size > min && (r.height > o.height + 0.5 || r.overflowWidth)) {
+  // One-line text only shrinks to fit its width (like Card Conjurer); boxes shrink to fit their height.
+  while (size > min && ((!o.oneLine && r.height > o.height + 0.5) || r.overflowWidth)) {
     size = Math.max(min, size * 0.97);
     r = attempt(tokens, measure, o, size);
   }
 
-  const top = o.oneLine || o.centerVertically ? Math.max(0, (o.height - r.height) / 2) : 0;
+  // Card Conjurer's vertical centering: (box height − text height + 0.15 × size) / 2.
+  const top = o.oneLine || o.centerVertically ? (o.height - r.height + size * 0.15) / 2 : 0;
   let y = top;
   const barYs: number[] = [];
   const out: Line[] = r.lines.map((l, i) => {
     if (i > 0) y += l.gapBefore;
     if (r.bars.includes(i)) barYs.push(y - l.gapBefore / 2);
-    const baseline = y + size * ASCENT + (o.oneLine ? size * 0.15 : 0);
+    const baseline = y + size * ASCENT;
     y += size;
     const shift = o.align === 'center' ? (o.width - l.width) / 2 : o.align === 'right' ? o.width - l.width : 0;
     return { baseline, width: l.width, items: l.items.map((it) => ({ ...it, x: it.x + shift })) };
