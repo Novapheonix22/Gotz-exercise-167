@@ -217,6 +217,8 @@ One `LayoutSpec` + PNG set each. The editor shows the matching extra fields, lik
 
 ### Phase 5: Card Conjurer editor features (4 weeks)
 - [ ] **Restore** button: snapshot on opening the editor, one tap to go back to it
+- [ ] **Add layer** sheet: only extras the new card flow doesn't cover (inner crown, color identity pips, dark P/T box, "The List" stamp, Brawl crown) plus your own PNG. No full frame-pack browser in the editor.
+- [ ] **Change card style**: reopens the new card flow (steps 1–2) on an existing card, keeping its text and art, and rebuilds the layers
 - [ ] **Advanced mode** layer list: add, reorder (drag), delete; per-layer X/Y/W/H, opacity, blend mode, preserve alpha, color overlay, HSL, erase
 - [ ] Masks: Pinline, Title, Type, Rules, Frame, Border, No Mask; add to **right half / left half / middle third / top half / bottom half** (how hybrid frames are built)
 - [ ] Import your own frame PNGs from Files
@@ -300,7 +302,7 @@ Full detail in [`docs/cardconjurer-inventory.md`](docs/cardconjurer-inventory.md
 
 | Card Conjurer feature | Phase |
 |---|---|
-| Frame groups/packs, search, Auto-frame (22 presets) | 3 / 6 |
+| Frame groups/packs, Auto-frame presets | 3 / 6 (picked in the new card flow, not browsed in the editor) |
 | Layer stack, masks, half/third placement, Frame Image Editor | 5 |
 | Custom frame upload | 5 |
 | Text boxes, Edit Bounds, font size, Bold/Italic, extra boxes | 5 |
