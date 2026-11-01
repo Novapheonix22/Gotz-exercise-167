@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run fetch-assets && npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/((?!cc/|assets/).*)", "destination": "/index.html" }],
+  "headers": [
+    { "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }] },
+    { "source": "/cc/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }] }
+  ]
+}
