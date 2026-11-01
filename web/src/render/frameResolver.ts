@@ -5,6 +5,7 @@ import type { Card, FrameColor } from '../model/card';
 import { typeLine } from '../model/card';
 import { costColors, type Color } from './symbols';
 import type { Pack, PackFrame } from './packs';
+import packIds from './packIds.json';
 
 export interface Bounds { x: number; y: number; width: number; height: number }
 
@@ -131,19 +132,8 @@ export interface Packs {
   lands?: Pack;
 }
 
-/** Pack ids needed to draw regular cards. */
-export const REGULAR_PACK_IDS: Record<keyof Packs, string> = {
-  regular: 'M15Regular-1',
-  crowns: 'M15LegendCrowns',
-  floatingCrowns: 'M15LegendCrownsFloating',
-  stamps: 'M15HoloStamps',
-  nyx: 'M15Nyx',
-  snow: 'M15Snow',
-  devoid: 'M15Devoid',
-  nickname: 'M15Nickname-2',
-  borders: 'M15Borders',
-  lands: 'M15Lands',
-};
+/** Pack ids needed to draw regular cards (also read by scripts/fetch-assets.mjs). */
+export const REGULAR_PACK_IDS: Record<keyof Packs, string> = packIds;
 
 /** Find the frame image for a color letter in the card's frame style. */
 function frameImage(letter: string, card: Card, packs: Packs): PackFrame | undefined {

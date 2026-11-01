@@ -18,7 +18,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE = join(ROOT, '.cache', 'cc');
 const OUT = join(ROOT, 'public', 'cc');
 
-const DEFAULT_PACKS = ['M15Regular-1', 'M15LegendCrowns', 'M15LegendCrownsFloating', 'M15HoloStamps'];
+// Every pack the app uses. Shared with the app so the two lists can't drift apart.
+const DEFAULT_PACKS = Object.values(JSON.parse(await readFile(join(ROOT, 'src', 'render', 'packIds.json'), 'utf8')));
 
 const FONTS = ['beleren-b', 'beleren-bsc', 'mplantin', 'mplantin-i', 'gotham-medium'];
 

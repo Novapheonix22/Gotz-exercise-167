@@ -6,9 +6,18 @@ import { CARD_H, CARD_W, renderCard } from '../render/renderer';
 
 let packsPromise: Promise<Packs> | null = null;
 export function loadAllPacks(): Promise<Packs> {
+  // Only the regular pack is required; a missing optional pack just disables that frame option.
   packsPromise ??= Promise.all(
-    Object.entries(REGULAR_PACK_IDS).map(async ([key, id]) => [key, await loadPack(id)] as const),
-  ).then((entries) => Object.fromEntries(entries) as unknown as Packs);
+    Object.entries(REGULAR_PACK_IDS).map(async ([key, id]) => {
+      try {
+        return [key, await loadPack(id)] as const;
+      } catch (e) {
+        if (key === 'regular') throw e;
+        console.warn(`Optional frame pack ${id} is missing`);
+        return [key, undefined] as const;
+      }
+    }),
+  ).then((entries) => Object.fromEntries(entries.filter(([, v]) => v)) as unknown as Packs);
   return packsPromise;
 }
 
