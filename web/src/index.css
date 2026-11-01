@@ -198,3 +198,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .save-state { margin-left: auto; font-size: 13px; color: var(--text2); }
 .save-state.error { color: #d0473a; font-weight: 600; }
 .done { min-height: 40px; padding: 0 18px; border: 0; border-radius: 12px; font-weight: 700; cursor: pointer; }
+.generic-keys { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: thin; }
+.mana-key.small { width: 40px; height: 40px; flex-shrink: 0; }
+.mana-key.small img { width: 24px; height: 24px; }
+.mana-key.on { box-shadow: inset 0 0 0 2px var(--accent); }

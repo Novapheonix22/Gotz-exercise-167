@@ -4,13 +4,17 @@ import { typeLine } from './model/card';
 import type { Packs } from './render/frameResolver';
 import { CARD_W, renderCard } from './render/renderer';
 import { prepareImage, type Store } from './data/store';
+import { normalizeManaCost, setGeneric } from './render/manaOrder';
 import { CardCanvas } from './components/CardCanvas';
 import SetPicker, { StoredImage } from './components/SetPicker';
 import { familyById } from './flow/families';
 import { Steps } from './pages/KindPicker';
 
 const PREVIEW_SCALE = 0.4;
-const MANA_KEYS = ['W', 'U', 'B', 'R', 'G', 'C', 'X', '1', '2', '3', '4', 'T'];
+const COLOR_KEYS = ['W', 'U', 'B', 'R', 'G', 'C', 'X', 'S'];
+const RULES_KEYS = ['T', 'Q', 'W', 'U', 'B', 'R', 'G', 'C', 'X', 'E'];
+const GENERIC = Array.from({ length: 21 }, (_, i) => i);
+const genericOf = (cost: string) => cost.match(/\{(\d+)\}/)?.[1];
 
 export type SaveState = 'saved' | 'saving' | 'error' | 'unsaved';
 
@@ -130,14 +134,27 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
             {!isLand && (
               <div className="field">
                 <label htmlFor="cost">Mana cost</label>
-                <input id="cost" value={card.manaCost} onChange={(e) => set('manaCost', e.target.value)} placeholder="{2}{W}{U}" />
-                <div className="mana-keys" role="group" aria-label="Insert mana symbol">
-                  {MANA_KEYS.filter((k) => k !== 'T').map((k) => (
-                    <button key={k} type="button" className="mana-key" onClick={() => set('manaCost', card.manaCost + `{${k}}`)} aria-label={`Add ${k}`}>
+                <input id="cost" value={card.manaCost} placeholder="{2}{W}{U}"
+                  onChange={(e) => set('manaCost', e.target.value)}
+                  onBlur={(e) => set('manaCost', normalizeManaCost(e.target.value))} />
+                <small>Colors are put in the official order automatically.</small>
+                <div className="mana-keys" role="group" aria-label="Add mana symbol">
+                  {COLOR_KEYS.map((k) => (
+                    <button key={k} type="button" className="mana-key" onClick={() => set('manaCost', normalizeManaCost(card.manaCost + `{${k}}`))} aria-label={`Add ${k}`}>
                       <img src={`/cc/mana/${k.toLowerCase()}.svg`} alt="" />
                     </button>
                   ))}
                   <button type="button" className="mana-key text" onClick={() => set('manaCost', card.manaCost.replace(/\{[^}]*\}$/, ''))} aria-label="Remove last symbol">⌫</button>
+                </div>
+                <span className="field-label">Generic</span>
+                <div className="generic-keys" role="group" aria-label="Set generic mana">
+                  {GENERIC.map((n) => (
+                    <button key={n} type="button" className={genericOf(card.manaCost) === String(n) ? 'mana-key small on' : 'mana-key small'}
+                      aria-pressed={genericOf(card.manaCost) === String(n)} aria-label={`Generic ${n}`}
+                      onClick={() => set('manaCost', genericOf(card.manaCost) === String(n) ? normalizeManaCost(card.manaCost.replace(/\{\d+\}/g, '')) : setGeneric(card.manaCost, n))}>
+                      <img src={`/cc/mana/${n}.svg`} alt="" />
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -162,9 +179,16 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
               <small>Symbols: {'{T}'}, {'{W}'}, {'{2/U}'}, {'{G/P}'}… · ~ = card name · (reminder text) turns italic</small>
             </label>
             <div className="mana-keys" role="group" aria-label="Insert symbol into rules text">
-              {MANA_KEYS.map((k) => (
+              {RULES_KEYS.map((k) => (
                 <button key={k} type="button" className="mana-key" onClick={() => set('rulesText', card.rulesText + `{${k}}`)} aria-label={`Add ${k} to rules text`}>
-                  <img src={`/cc/mana/${k.toLowerCase()}.svg`} alt="" />
+                  <img src={`/cc/mana/${k === 'Q' ? 'untap' : k.toLowerCase()}.svg`} alt="" />
+                </button>
+              ))}
+            </div>
+            <div className="generic-keys" role="group" aria-label="Insert generic mana into rules text">
+              {GENERIC.map((n) => (
+                <button key={n} type="button" className="mana-key small" onClick={() => set('rulesText', card.rulesText + `{${n}}`)} aria-label={`Add ${n} to rules text`}>
+                  <img src={`/cc/mana/${n}.svg`} alt="" />
                 </button>
               ))}
             </div>
