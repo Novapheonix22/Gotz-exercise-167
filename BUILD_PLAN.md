@@ -1,8 +1,12 @@
 # iOS Custom Card Maker: Build Plan
 
-Goal: a native iOS app with the same customization and functionality as the MTG.design card creator. It's for personal use (and maybe a few friends), installed from Xcode rather than the App Store.
+Goal: a native iOS app with the customization and functionality of **MTG.design** (the simple, form-based editor) **plus Card Conjurer** (cardconjurer.app: hundreds of frame packs, layered frames, free-form text boxes). It's for personal use (and maybe a few friends), installed from Xcode rather than the App Store.
 
-The full list of what MTG.design offers, taken from its logged-in editor, is in [`docs/mtg-design-inventory.md`](docs/mtg-design-inventory.md). This plan is built from that list. Section 5 maps every site feature to a phase.
+Reference inventories:
+- [`docs/mtg-design-inventory.md`](docs/mtg-design-inventory.md): every MTG.design editor option.
+- [`docs/cardconjurer-inventory.md`](docs/cardconjurer-inventory.md): every Card Conjurer option and all 381 frame packs.
+
+The approach: **MTG.design's ease of use on top, Card Conjurer's power underneath.** Phases 1–4 reach MTG.design parity. Phases 5–6 add Card Conjurer's layer editor and frame packs. Section 5 maps every feature to a phase.
 
 ---
 
@@ -16,7 +20,7 @@ The full list of what MTG.design offers, taken from its logged-in editor, is in 
 **Assets (authentic look):**
 - **Symbols:** the open-source *Mana* icon font (andrewgioia/mana) for mana, tap/untap, loyalty, saga chapters and Phyrexian/hybrid symbols.
 - **Fonts:** Beleren Bold (name, type line), Beleren Small Caps (artist/collector line), MPlantin + MPlantin Italic (rules and flavor text). Bundle them in the app.
-- **Frames:** high-res frame PNGs from the custom-card community (e.g. the frame packs used by open-source makers like Card Conjurer), stored with one `LayoutSpec` JSON per frame.
+- **Frames:** the Card Conjurer frame pack PNGs (frames, masks, crowns, stamps, P/T boxes). Each pack is imported with a small manifest JSON (see §2). A helper script can generate manifests from a folder of PNGs.
 - **Set symbol:** MTG.design takes a PNG URL. The app takes an image from Photos/Files (and optionally a URL), plus the *Keyrune* font as a bonus picker.
 
 ---
@@ -49,12 +53,18 @@ App
 │   ├── TextLayoutEngine    parses the site's text syntax, lays out symbols, fits text to the box
 │   ├── SymbolParser        "{2}{W}{U/B}{G/P}{T}" → tokens → glyphs
 │   └── LayoutSpecs/        one JSON per Special Frame: rectangles, fonts, colors, asset names
-├── Editor          form sections that show/hide by frame type (like the site's hidden fields)
+│   ├── LayerCompositor     draws a stack of frame layers (image + mask + rect + opacity + blend + color/HSL)
+│   └── FramePacks/         Card Conjurer-style packs: images, masks, and a "frame version" (text box + art bounds)
+├── Editor
+│   ├── Simple mode     MTG.design-style form; picks a preset that builds the layer stack for you
+│   └── Advanced mode   Card Conjurer-style: layer list, masks, text box bounds, per-element X/Y/scale
 ├── Library         cards grouped by "Ungrouped" and by custom set
 └── Export          JPG/PNG/PDF, print sheets, share
 ```
 
 **Rules:**
+- **Two-level frame model.** Underneath, every card is a **stack of frame layers**, the way Card Conjurer works: each layer is a PNG, an optional mask (Pinline, Title, Type, Rules, Frame, Border, or a half/third of the card), a rectangle, opacity, blend mode and optional color overlay/HSL shift. On top, **presets** (MTG.design's Special Frames, Card Conjurer's Auto-frame list) build that stack automatically from the mana cost and type. Simple mode only shows presets; Advanced mode lets you edit the stack directly. That is how a floating legend crown, a holo stamp or a "Godzilla" nickname bar gets added: it's one more layer.
+- **Frame packs are data.** A pack = PNGs + a manifest (names, colors, masks, default rects) + an optional *frame version* (where the title, type, rules, P/T text boxes and art window sit). Adding a pack never needs new Swift code.
 - **Frames are data, not code.** Each Special Frame is a `LayoutSpec` JSON + PNG layers, so 17+ layouts don't mean 17 hand-written renderers.
 - **Fixed canvas.** Lay out on a 1488 × 2078 canvas (exactly 2× the site's 744 × 1039 export) and scale when drawing. The site's export size then comes from a plain 0.5× scale.
 - **Frame is derived, not picked.** The site has no "frame color" dropdown. The color comes from the mana cost (and Color Indicator), the frame style from the **Type** (artifact, enchantment → Nyx, land, etc.), and the pinlines from **Accent**. `FrameResolver` encodes those rules, and the "Not verified" items in the inventory get settled by comparing against real site renders.
@@ -82,6 +92,8 @@ App
     var colorIndicator: ColorCombo?             // None, W, WU, … WUBRG
     var accent: Accent = .default               // Default, Gold, W, WU, WB, U, UB, UR, B, BR, BG, R, RG, RW, G, GW, GU
     var landOverlay: Accent = .default
+    var layers: [FrameLayer]                    // Card Conjurer-style stack, generated by presets or edited by hand
+    var textBoxes: [TextBox]                    // title, type, rules, P/T, nickname, date stamp… each with bounds, font size, bold/italic
     var planeswalkerSize: Int = 3               // 3 or 4
     var isMiracle: Bool = false
 
@@ -172,24 +184,45 @@ One `LayoutSpec` + PNG set each. The editor shows the matching extra fields, lik
 - [ ] Export a whole set as images; share a card as an editable file (`.card` with embedded art) so friends with the app can open and remix it. This replaces the site's share link.
 - [ ] Search/filter by name, color, type, rarity, set
 
-### Phase 5: Extras beyond the site (optional, as you like)
-- [ ] **Prompt challenges** like the site's Moxtober (a daily prompt list you can tag cards with)
+### Phase 5: Card Conjurer editor features (4 weeks)
+- [ ] **Advanced mode** layer list: add, reorder (drag), delete; per-layer X/Y/W/H, opacity, blend mode, preserve alpha, color overlay, HSL, erase
+- [ ] Masks: Pinline, Title, Type, Rules, Frame, Border, No Mask; add to **right half / left half / middle third / top half / bottom half** (how hybrid frames are built)
+- [ ] Import your own frame PNGs from Files
+- [ ] **Text boxes** with Edit Bounds, per-box font size, Bold/Italic; add extra boxes (Nickname, Date Stamp…); Hide reminder text / Auto-italicize reminder text
+- [ ] **Full Card Conjurer text codes** alongside MTG.design's: `{cardname}`, `{-}`, `{i}`/`{bold}`, `{lns}`, `{divider}`, `{flavor}`, `{oldflavor}`, `{fontsize}`, `{fontcolor}`, alignment/justify, `{up#}`…`{permashift}`, `{shadow}`, `{outline}`, `{bullet}`, `{indent}`, `{kerning}`, `{roll}`, `{ruby}`
+- [ ] **Full symbol codes**: `{1}`–`{20}`, lowercase colors, hybrid `{wu}`/`{2w}`, Phyrexian `{pw}`, hybrid Phyrexian `{wup}`, `{untap}`, old tap symbols, `{y}{z}`, `{s}`, `{e}`, loyalty `{+1}`, `{planeswalker}`, `{chaos}`, pawprint `{p}`. Both spellings (`{U/B}` and `{ub}`) work.
+- [ ] **Art**: X/Y/zoom/**rotation**, Auto Fit, Preserve position, Grayscale, paste from clipboard; *optional* "find art by card name" via Scryfall (needs internet)
+- [ ] **Set symbol**: by set code + rarity (Keyrune bundled), or image; X/Y/zoom; lock code
+- [ ] **Watermarks**: the full lore list (guilds, colleges, families, clans, poleis, factions…), left/right colors, opacity, X/Y/scale
+- [ ] **Collector info**: Number, Rarity, Note, Set, Language, Artist, Year; post-ONE style toggle; show/hide; **serial number** (001/500) with star/dot; Save as Default
+- [ ] Guidelines overlay, Rounded Corners on export, transparency highlight
+- [ ] *Optional* **Import a real card by name** (Scryfall, any print, 12 languages) and Paste full text
+- [ ] Backup/restore all cards as one file; Download All Images as ZIP
+
+### Phase 6: Card Conjurer frame packs (in tiers)
+Each pack = PNGs + manifest + snapshot test. Order:
+- [ ] **Tier 1, the ones you asked for (6–8 weeks):** all of the Regular add-ons (**legend crowns, floating legend crowns, inner crowns, nicknames ("Godzilla"), smooth nickname crowns**, holo stamps, dark P/T, colored borders, color identity pips, The List stamp, Brawl crowns, miracle, lands), **Omens, Battles, Rooms, Adventures**, Prepare, Stations, Spree, Cases, Class, Snow, Mutate, Devoid, Aftermath, Flip, Levelers, Split/Fuse, Prototype, Attractions, Conspiracies, Colorshifted; all **Tokens**, **Sagas** (incl. saga creatures), **Planeswalkers** (all variants), **Modal DFC** and **Transform** families with transform icons
+- [ ] **Tier 2 (4 weeks):** generic showcase styles (Borderless, Extended Art, Fullart, Etched, Full Text, FNM promo), Universes Beyond, Promos (Tall Art), Textless/Fullart basics, Accurate Frames, Phyrexian
+- [ ] **Tier 3 (ongoing, as you want them):** the ~60 set-specific showcases, Custom/community packs, Old/Misc (Alpha through Eighth Edition, playtest, Planechase, Vanguard), 1/8" margin packs
+- [ ] Not planned unless asked: Flesh and Blood frames
+
+### Phase 7: Extras (optional)
+- [ ] **Prompt challenges** like MTG.design's Moxtober
 - [ ] iCloud sync between devices
-- [ ] Frames the site lacks: split, flip, battle, class, vehicle, snow, borderless/extended art
-- [ ] Frame-pack import (ZIP of PNGs + LayoutSpec JSON) to add frames without rebuilding
 - [ ] iPad niceties: keyboard shortcuts, drag-and-drop art
 
-**Total for site parity (Phases 1–4):** roughly 11–12 weeks part-time.
+**Totals (part-time):** MTG.design parity (Phases 1–4) about 11–12 weeks; plus Card Conjurer editor and Tier 1 frames (Phases 5–6) about 10–12 more weeks. Tiers 2–3 are open-ended and can ship pack by pack.
 
 ---
 
 ## 4. Hardest problems
 
 1. **Text fitting.** The site has a Text Size slider (18–38) and still fits text into the box. Treat the slider as the *maximum* size and binary-search down until the text fits. Write `TextLayoutEngine` as a pure function and test it on dense cards.
-2. **Frame resolution rules.** No single dropdown sets the frame. Mana cost, Type, Accent, Color Indicator, Border and Special Frame all combine. Put the rules in one `FrameResolver` with tests, and check them against real site renders.
-3. **Preview = export.** One renderer, one canvas. Never build the preview from SwiftUI `Text` views.
-4. **Cropping on a phone.** Pinch and drag directly on the art box in the preview, with a full-screen crop view as a fallback.
-5. **Memory.** Downsample art for the live preview, and use full resolution only for export.
+2. **Layer compositing performance.** Some Card Conjurer cards stack 10+ full-size PNG layers with masks. Cache composited layers, only redraw what changed, and keep the preview at screen resolution.
+3. **Frame resolution rules.** No single dropdown sets the frame. Mana cost, Type, Accent, Color Indicator, Border and Special Frame all combine. Put the rules in one `FrameResolver` with tests, and check them against real site renders.
+4. **Preview = export.** One renderer, one canvas. Never build the preview from SwiftUI `Text` views.
+5. **Cropping on a phone.** Pinch and drag directly on the art box in the preview, with a full-screen crop view as a fallback.
+6. **Memory.** Downsample art for the live preview, and use full resolution only for export.
 
 ---
 
@@ -229,9 +262,33 @@ Every item from [`docs/mtg-design-inventory.md`](docs/mtg-design-inventory.md), 
 
 ---
 
+### Card Conjurer checklist (summary)
+
+Full detail in [`docs/cardconjurer-inventory.md`](docs/cardconjurer-inventory.md).
+
+| Card Conjurer feature | Phase |
+|---|---|
+| Frame groups/packs, search, Auto-frame (22 presets) | 3 / 6 |
+| Layer stack, masks, half/third placement, Frame Image Editor | 5 |
+| Custom frame upload | 5 |
+| Text boxes, Edit Bounds, font size, Bold/Italic, extra boxes | 5 |
+| All text codes and symbol codes | 1 / 5 |
+| Art: upload/URL/paste, X/Y/zoom/rotation, autofit, grayscale | 2 / 5 |
+| Art by card name (Scryfall) | 5 (optional) |
+| Set symbol by code + rarity, placement, lock | 5 |
+| Watermarks: lore list, two colors, opacity, placement | 5 |
+| Collector info, post-ONE style, serial number, defaults | 2 / 5 |
+| Import real card by name, 12 languages, paste text | 5 (optional) |
+| Save/load/delete, cards file, download all images | 4 / 5 |
+| Rounded corners, guidelines | 4 / 5 |
+| 381 frame packs | 6 (tiers) |
+| Flesh and Blood | not planned |
+
+---
+
 ## 6. Next steps
 
 1. Pick free Apple ID vs. $99 developer account (see §0).
-2. Collect the fonts and the Normal frame PNGs.
+2. Collect the fonts and the Card Conjurer Regular frame pack PNGs.
 3. Download a handful of your own MTG.design renders to use as visual references for the snapshot tests.
 4. Start Phase 1.
