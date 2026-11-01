@@ -148,12 +148,16 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
                 </div>
                 <span className="field-label">Generic</span>
                 <div className="generic-keys" role="group" aria-label="Set generic mana">
-                  {GENERIC.map((n) => (
-                    <button key={n} type="button" className={genericOf(card.manaCost) === String(n) ? 'mana-key small on' : 'mana-key small'}
-                      aria-pressed={genericOf(card.manaCost) === String(n)} aria-label={`Generic ${n}`}
-                      onClick={() => set('manaCost', genericOf(card.manaCost) === String(n) ? normalizeManaCost(card.manaCost.replace(/\{\d+\}/g, '')) : setGeneric(card.manaCost, n))}>
-                      <img src={`/cc/mana/${n}.svg`} alt="" />
-                    </button>
+                  {[GENERIC.slice(0, 10), GENERIC.slice(10)].map((row, r) => (
+                    <div key={r} className="generic-row">
+                      {row.map((n) => (
+                        <button key={n} type="button" className={genericOf(card.manaCost) === String(n) ? 'mana-key small on' : 'mana-key small'}
+                          aria-pressed={genericOf(card.manaCost) === String(n)} aria-label={`Generic ${n}`}
+                          onClick={() => set('manaCost', genericOf(card.manaCost) === String(n) ? normalizeManaCost(card.manaCost.replace(/\{\d+\}/g, '')) : setGeneric(card.manaCost, n))}>
+                          <img src={`/cc/mana/${n}.svg`} alt="" />
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -186,10 +190,14 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
               ))}
             </div>
             <div className="generic-keys" role="group" aria-label="Insert generic mana into rules text">
-              {GENERIC.map((n) => (
-                <button key={n} type="button" className="mana-key small" onClick={() => set('rulesText', card.rulesText + `{${n}}`)} aria-label={`Add ${n} to rules text`}>
-                  <img src={`/cc/mana/${n}.svg`} alt="" />
-                </button>
+              {[GENERIC.slice(0, 10), GENERIC.slice(10)].map((row, r) => (
+                <div key={r} className="generic-row">
+                  {row.map((n) => (
+                    <button key={n} type="button" className="mana-key small" onClick={() => set('rulesText', card.rulesText + `{${n}}`)} aria-label={`Add ${n} to rules text`}>
+                      <img src={`/cc/mana/${n}.svg`} alt="" />
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
             <label className="field">
