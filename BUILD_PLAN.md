@@ -74,7 +74,7 @@ src/
 - **Restore button (the panic button).** Opening the in-depth editor takes a snapshot of the layer stack. **Restore** (in the Layers header, with a confirm) puts the stack back to that snapshot: added layers removed, deleted ones back, order and positions reset. Color changes made since (e.g. a new mana cost) carry over, so the restored frame matches the card's current colors.
 - **Frame packs are data.** A pack = PNGs + a manifest (names, colors, masks, default rects) + a *frame version* (where the title, type, rules, P/T text boxes and art window sit). Adding a pack never needs new code.
 - **Frame color comes from the mana cost** (mono, gold, hybrid, artifact/colorless, land), with a manual override.
-- **Fixed canvas.** Cards are laid out on a 1488 × 2078 canvas (exactly 2× MTG.design's 744 × 1039 export) and scaled when drawn.
+- **Fixed canvas.** Cards are drawn at Card Conjurer's native frame size, 2010 × 2814, using its positions (stored as fractions of the card). Exports scale down: 744 × 1039 standard (MTG.design size) or full size.
 
 ### Data model (sketch)
 
@@ -193,9 +193,9 @@ One frame pack + frame version each; the form shows the matching extra fields:
 
 ### Phase 4: Sets, export and backup
 - [ ] **Custom sets**: code, name, symbol, total; library grouped by set + "Ungrouped"; auto-numbering
-- [ ] Higher-res export (1488 × 2078)
+- [ ] Full-size export (2010 × 2814)
 - [ ] **Export for online play** (one tap each; exact formats checked against each program while building):
-  - **Untap (untap.in)**, the main one: whatever Untap accepts for custom cards (image upload vs. image link in a deck list). If it needs links, add an image hosting option.
+  - **Untap (untap.in)**, the main one (details in [`docs/untap-custom-cards.md`](docs/untap-custom-cards.md)): single cards as PNGs to upload in Untap's add-card form (no hosting needed); whole sets as Untap's bulk-upload CSV (title, set, `cus`, image links, rarity, sideways orientation for battles, text; 100 cards per file). The CSV needs the images online, so this adds an image hosting option.
   - **Cockatrice**: a custom set (cards XML + card images) for Cockatrice's custom sets folder
   - **Tabletop Simulator**: a deck sheet image (cards in a grid) plus the file TTS loads as a deck
   - **Forge**: custom card files plus card images in Forge's custom folders
@@ -295,6 +295,4 @@ Full detail in [`docs/cardconjurer-inventory.md`](docs/cardconjurer-inventory.md
 
 ## 7. Next steps
 
-1. **Frame images and fonts:** allow `cardconjurer.app` in the session's network settings so the download script can fetch the frame packs and fonts.
-2. **Untap:** allow `untap.in` so the Untap export format can be checked.
-3. Start Phase 1.
+1. Start Phase 1.
