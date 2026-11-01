@@ -65,6 +65,7 @@ App
 **Rules:**
 - **Two-level frame model.** Underneath, every card is a **stack of frame layers**, the way Card Conjurer works: each layer is a PNG, an optional mask (Pinline, Title, Type, Rules, Frame, Border, or a half/third of the card), a rectangle, opacity, blend mode and optional color overlay/HSL shift. On top, **presets** (MTG.design's Special Frames, Card Conjurer's Auto-frame list) build that stack automatically from the mana cost and type. Simple mode only shows presets; Advanced mode lets you edit the stack directly. That is how a floating legend crown, a holo stamp or a "Godzilla" nickname bar gets added: it's one more layer.
 - **The layer stack is always built for you.** The new card flow assembles every layer in the standard order (border → frame → P/T box → crowns/nickname → stamps), and changing the mana cost or a toggle rebuilds it. Each layer kind has a fixed slot, so a frame added from a pack lands in the right place automatically. Layers you edit by hand are marked as yours and left alone by later rebuilds; **Reset to auto** puts a layer (or the whole stack) back.
+- **Restore button (the panic button).** Opening the in-depth editor takes a snapshot of the layer stack. **Restore** (in the Layers header, with a confirm) puts the stack back to that snapshot: added layers removed, deleted ones back, order and positions reset. Color changes made since (e.g. a new mana cost) carry over, so the restored frame matches the card's current colors.
 - **Frame packs are data.** A pack = PNGs + a manifest (names, colors, masks, default rects) + an optional *frame version* (where the title, type, rules, P/T text boxes and art window sit). Adding a pack never needs new Swift code.
 - **Frames are data, not code.** Each Special Frame is a `LayoutSpec` JSON + PNG layers, so 17+ layouts don't mean 17 hand-written renderers.
 - **Fixed canvas.** Lay out on a 1488 × 2078 canvas (exactly 2× the site's 744 × 1039 export) and scale when drawing. The site's export size then comes from a plain 0.5× scale.
@@ -215,6 +216,7 @@ One `LayoutSpec` + PNG set each. The editor shows the matching extra fields, lik
 - [ ] Search/filter by name, color, type, rarity, set
 
 ### Phase 5: Card Conjurer editor features (4 weeks)
+- [ ] **Restore** button: snapshot on opening the editor, one tap to go back to it
 - [ ] **Advanced mode** layer list: add, reorder (drag), delete; per-layer X/Y/W/H, opacity, blend mode, preserve alpha, color overlay, HSL, erase
 - [ ] Masks: Pinline, Title, Type, Rules, Frame, Border, No Mask; add to **right half / left half / middle third / top half / bottom half** (how hybrid frames are built)
 - [ ] Import your own frame PNGs from Files
