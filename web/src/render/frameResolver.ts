@@ -1,7 +1,7 @@
 // Builds the frame layer stack for a regular (M15) card from its mana cost,
 // type line and toggles. Follows Card Conjurer's auto-frame rules.
 
-import type { Card } from '../model/card';
+import type { Card, FrameColor } from '../model/card';
 import { typeLine } from '../model/card';
 import { costColors, type Color } from './symbols';
 import type { Pack, PackFrame } from './packs';
@@ -34,6 +34,7 @@ export function orderedColors(colors: Color[]): Color[] {
   return [colors[1], colors[0]];
 }
 
+/** Each part's color letter. Land variants are written like "WL" (white land). */
 export interface FrameProperties {
   frame: string; frameRight?: string;
   rules: string; rulesRight?: string;
@@ -42,7 +43,6 @@ export interface FrameProperties {
   pt?: string;
 }
 
-/** Which color letter each part of the frame uses. */
 export function frameProperties(colors: Color[], manaCost: string, type: string, hasPT: boolean): FrameProperties {
   const c = orderedColors(colors);
   const isHybrid = manaCost.includes('/');
@@ -50,17 +50,16 @@ export function frameProperties(colors: Color[], manaCost: string, type: string,
   const isArtifact = type.includes('Artifact');
   const isVehicle = type.includes('Vehicle');
 
-  // Colored lands use land-colored frames from the Lands pack, not loaded yet; use plain land for now.
   let rules: string;
-  if (isLand) rules = 'L';
+  if (isLand) rules = c.length === 0 ? 'L' : c.length > 2 ? 'ML' : c[0] + 'L';
   else if (c.length > 2) rules = 'M';
   else if (c.length > 0) rules = c[0];
   else rules = 'A';
-  const rulesRight = c.length === 2 && !isLand ? c[1] : undefined;
+  const rulesRight = c.length === 2 ? (isLand ? c[1] + 'L' : c[1]) : undefined;
 
   let typeTitle: string;
   if (c.length >= 2) typeTitle = (isHybrid || isLand) && c.length === 2 ? 'L' : 'M';
-  else if (isLand) typeTitle = 'L';
+  else if (isLand) typeTitle = c.length === 0 ? 'L' : c[0] + 'L';
   else if (c.length === 1) typeTitle = c[0];
   else typeTitle = 'A';
 
@@ -75,44 +74,123 @@ export function frameProperties(colors: Color[], manaCost: string, type: string,
   const frameRight = !isVehicle && !isArtifact && c.length === 2 && isHybrid ? c[1] : undefined;
 
   let pt: string | undefined;
-  if (hasPT) pt = isVehicle ? 'V' : typeTitle === 'L' ? 'C' : typeTitle;
+  if (hasPT) pt = isVehicle ? 'V' : typeTitle === 'L' ? 'C' : typeTitle.replace('L', '') || 'C';
 
   return { frame, frameRight, rules, rulesRight, pinline: rules, pinlineRight: rulesRight, typeTitle, pt };
 }
 
+/** Lands have no mana cost: read colors from "Add {G}" abilities and basic land types (Card Conjurer's rule). */
+export function landColors(rules: string, type: string): Color[] {
+  const found = new Set<Color>();
+  const body = rules.split(/\{flavor\}/i)[0];
+  for (const line of body.split('\n')) {
+    const at = line.search(/\badd\b/i);
+    if (at < 0) continue;
+    for (const m of line.slice(at).matchAll(/\{([wubrg])\}/gi)) found.add(m[1].toUpperCase() as Color);
+  }
+  const text = `${body} ${type}`.toLowerCase();
+  const basics: [string, Color][] = [['plains', 'W'], ['island', 'U'], ['swamp', 'B'], ['mountain', 'R'], ['forest', 'G']];
+  for (const [word, c] of basics) if (text.includes(word)) found.add(c);
+  return (['W', 'U', 'B', 'R', 'G'] as Color[]).filter((c) => found.has(c));
+}
+
+/** Colors and type flags after applying a manual frame color choice. */
+export function effectiveColors(card: Card): { colors: Color[]; type: string } {
+  const type = typeLine(card);
+  const fc: FrameColor = card.frameColor;
+  if (fc === 'auto') {
+    if (type.includes('Land')) return { colors: landColors(card.rulesText, type), type };
+    return { colors: costColors(card.manaCost), type };
+  }
+  if (fc === 'M') return { colors: ['W', 'U', 'B'], type: type.replace(/Artifact|Land/g, '') };
+  if (fc === 'A') return { colors: [], type: type.includes('Artifact') ? type : `${type} Artifact` };
+  if (fc === 'L') return { colors: [], type: type.includes('Land') ? type : `${type} Land` };
+  return { colors: [fc], type: type.replace(/Artifact|Land/g, '') };
+}
+
 const RIGHT_HALF = '/cc/img/frames/maskRightHalf.webp';
 
-function findFrame(pack: Pack | undefined, name: string): PackFrame | undefined {
+function find(pack: Pack | undefined, name: string): PackFrame | undefined {
   return pack?.frames.find((f) => f.name === name);
 }
 
-function letterName(letter: string) { return LETTER_NAMES[letter] ?? 'Artifact'; }
+const letterName = (letter: string) => LETTER_NAMES[letter] ?? 'Artifact';
+/** Strip the land marker ("WL" → "W") for parts that have no land-colored version. */
+const base = (letter: string) => (letter.length > 1 && letter.endsWith('L') ? letter[0] : letter);
 
 export interface Packs {
   regular: Pack;
   crowns?: Pack;
   floatingCrowns?: Pack;
   stamps?: Pack;
+  nyx?: Pack;
+  snow?: Pack;
+  devoid?: Pack;
+  nickname?: Pack;
+  borders?: Pack;
+  lands?: Pack;
+}
+
+/** Pack ids needed to draw regular cards. */
+export const REGULAR_PACK_IDS: Record<keyof Packs, string> = {
+  regular: 'M15Regular-1',
+  crowns: 'M15LegendCrowns',
+  floatingCrowns: 'M15LegendCrownsFloating',
+  stamps: 'M15HoloStamps',
+  nyx: 'M15Nyx',
+  snow: 'M15Snow',
+  devoid: 'M15Devoid',
+  nickname: 'M15Nickname-2',
+  borders: 'M15Borders',
+  lands: 'M15Lands',
+};
+
+/** Find the frame image for a color letter in the card's frame style. */
+function frameImage(letter: string, card: Card, packs: Packs): PackFrame | undefined {
+  const land = letter.length > 1 && letter.endsWith('L');
+  const color = base(letter);
+  if (card.toggles.snow && packs.snow) {
+    const f = land ? find(packs.snow, `${letterName(color)} Land Frame`) : find(packs.snow, `${letterName(letter)} Frame`);
+    if (f) return f;
+  }
+  if (card.toggles.devoid && packs.devoid) {
+    const f = find(packs.devoid, `${letterName(color)} Frame`);
+    if (f) return f;
+  }
+  if (card.toggles.nyx && packs.nyx && letter !== 'L' && !land) {
+    const f = find(packs.nyx, `${letterName(letter)} Frame`);
+    if (f) return f;
+  }
+  if (land && packs.lands) {
+    const f = find(packs.lands, `${letterName(color)} Frame`);
+    if (f) return f;
+  }
+  return find(packs.regular, `${letterName(letter)} Frame`) ?? find(packs.regular, 'Artifact Frame');
 }
 
 /** Layers from bottom to top. */
 export function buildLayers(card: Card, packs: Packs): FrameLayer[] {
-  const type = typeLine(card);
-  const colors = costColors(card.manaCost);
+  const { colors, type } = effectiveColors(card);
   const hasPT = !!(card.power.trim() || card.toughness.trim());
   const p = frameProperties(colors, card.manaCost, type, hasPT);
   const layers: FrameLayer[] = [];
+  const regularMasks = find(packs.regular, 'White Frame')?.masks ?? [];
 
   const masked = (letter: string, role: string, maskName: string | null, right = false) => {
-    const f = findFrame(packs.regular, `${letterName(letter)} Frame`) ?? findFrame(packs.regular, 'Artifact Frame');
+    const f = frameImage(letter, card, packs);
     if (!f) return;
     const masks: string[] = [];
     if (maskName) {
-      const m = f.masks?.find((x) => x.name === maskName);
+      const m = f.masks?.find((x) => x.name === maskName) ?? regularMasks.find((x) => x.name === maskName);
       if (m) masks.push(m.src);
     }
     if (right) masks.push(RIGHT_HALF);
-    layers.push({ role, name: `${letterName(letter)} ${role}${right ? ' (right)' : ''}`, src: f.src, masks });
+    layers.push({ role, name: `${f.name} · ${role}${right ? ' (right)' : ''}`, src: f.src, masks });
+  };
+  const add = (pack: Pack | undefined, name: string, role: string, extraMasks: string[] = []) => {
+    const f = find(pack, name);
+    if (f) layers.push({ role, name: f.name, src: f.src, masks: extraMasks, bounds: f.bounds });
+    return !!f;
   };
 
   // Bottom to top (Card Conjurer builds top-down, then reverses).
@@ -127,30 +205,40 @@ export function buildLayers(card: Card, packs: Packs): FrameLayer[] {
   if (p.pinlineRight) masked(p.pinlineRight, 'Pinline', 'Pinline', true);
 
   if (p.pt) {
-    const f = findFrame(packs.regular, `${letterName(p.pt)} Power/Toughness`);
-    if (f) layers.push({ role: 'PT', name: f.name, src: f.src, masks: [], bounds: f.bounds });
+    if (!(card.toggles.devoid && add(packs.devoid, 'Devoid Power/Toughness', 'PT'))) {
+      add(packs.regular, `${letterName(p.pt)} Power/Toughness`, 'PT');
+    }
   }
 
-  const stampLetter = p.pinline === 'L' && colors.length === 0 ? 'L' : p.pinline;
-  if (card.holoStamp && packs.stamps) {
-    const f = findFrame(packs.stamps, `${letterName(stampLetter)} Holo Stamp`);
-    if (f) layers.push({ role: 'Stamp', name: f.name, src: f.src, masks: [], bounds: f.bounds });
-    if (p.pinlineRight) {
-      const r = findFrame(packs.stamps, `${letterName(p.pinlineRight)} Holo Stamp`);
-      if (r) layers.push({ role: 'Stamp', name: r.name + ' (right)', src: r.src, masks: [RIGHT_HALF], bounds: r.bounds });
-    }
+  const accent = base(p.pinline);
+  const accentRight = p.pinlineRight ? base(p.pinlineRight) : undefined;
+  const stampLetter = accent === 'L' && colors.length === 0 ? 'L' : accent;
+  if (card.holoStamp) {
+    add(packs.stamps, `${letterName(stampLetter)} Holo Stamp`, 'Stamp');
+    if (accentRight) add(packs.stamps, `${letterName(accentRight)} Holo Stamp`, 'Stamp', [RIGHT_HALF]);
+  }
+
+  if (card.toggles.nickname) {
+    add(packs.nickname, `${letterName(accent)} Nickname`, 'Nickname');
+    if (accentRight) add(packs.nickname, `${letterName(accentRight)} Nickname`, 'Nickname', [RIGHT_HALF]);
   }
 
   if (card.legendary !== 'none') {
     const pack = card.legendary === 'floating' ? packs.floatingCrowns : packs.crowns;
-    const cover = findFrame(pack, 'Legend Crown Border Cover');
-    if (cover) layers.push({ role: 'Crown Border Cover', name: cover.name, src: cover.src, masks: [], bounds: cover.bounds });
-    const crown = findFrame(pack, `${letterName(p.pinline)} Legend Crown`);
-    if (crown) layers.push({ role: 'Crown', name: crown.name, src: crown.src, masks: [], bounds: crown.bounds });
-    if (p.pinlineRight) {
-      const r = findFrame(pack, `${letterName(p.pinlineRight)} Legend Crown`);
-      if (r) layers.push({ role: 'Crown', name: r.name + ' (right)', src: r.src, masks: [RIGHT_HALF], bounds: r.bounds });
+    if (card.toggles.nyx) {
+      add(packs.nyx, `${letterName(accent)} Inner Crown (Nyx)`, 'Inner Crown');
+      if (accentRight) add(packs.nyx, `${letterName(accentRight)} Inner Crown (Nyx)`, 'Inner Crown', [RIGHT_HALF]);
     }
+    add(pack, 'Legend Crown Border Cover', 'Crown Border Cover');
+    add(pack, `${letterName(accent)} Legend Crown`, 'Crown');
+    if (accentRight) add(pack, `${letterName(accentRight)} Legend Crown`, 'Crown', [RIGHT_HALF]);
+  }
+
+  if (card.border !== 'black') {
+    const name = `${card.border[0].toUpperCase()}${card.border.slice(1)} Border`;
+    const f = find(packs.borders, name);
+    const mask = f?.masks?.find((m) => m.name === (card.legendary !== 'none' ? 'Border (With Crown)' : 'Border'));
+    if (f) layers.push({ role: 'Border Color', name, src: f.src, masks: mask ? [mask.src] : [] });
   }
 
   return layers;

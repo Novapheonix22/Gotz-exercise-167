@@ -1,55 +1,35 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { newCard, type Card, type Legendary, type Rarity } from './model/card';
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import type { Card, CardSet, Rarity } from './model/card';
+import { typeLine } from './model/card';
 import type { Packs } from './render/frameResolver';
-import { loadPack } from './render/packs';
-import { CARD_H, CARD_W, renderCard } from './render/renderer';
+import { CARD_W, renderCard } from './render/renderer';
+import { prepareImage, type Store } from './data/store';
+import { CardCanvas } from './components/CardCanvas';
+import SetPicker, { StoredImage } from './components/SetPicker';
+import { familyById } from './flow/families';
+import { Steps } from './pages/KindPicker';
 
 const PREVIEW_SCALE = 0.4;
-const MANA_KEYS = ['W', 'U', 'B', 'R', 'G', 'C', 'X', '1', '2', '3', '4'];
+const MANA_KEYS = ['W', 'U', 'B', 'R', 'G', 'C', 'X', '1', '2', '3', '4', 'T'];
 
-function usePacks() {
-  const [packs, setPacks] = useState<Packs | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    Promise.all([
-      loadPack('M15Regular-1'),
-      loadPack('M15LegendCrowns'),
-      loadPack('M15LegendCrownsFloating'),
-      loadPack('M15HoloStamps'),
-    ])
-      .then(([regular, crowns, floatingCrowns, stamps]) => setPacks({ regular, crowns, floatingCrowns, stamps }))
-      .catch((e: Error) => setError(e.message));
-  }, []);
-  return { packs, error };
+export type SaveState = 'saved' | 'saving' | 'error' | 'unsaved';
+
+interface Props {
+  card: Card;
+  setCard: (updater: (c: Card) => Card) => void;
+  packs: Packs;
+  store: Store;
+  sets: CardSet[];
+  onSetsChanged: () => Promise<void>;
+  saveState: SaveState;
+  isNew: boolean;
+  onDone: () => void;
+  onChangeStyle: () => void;
 }
 
-function useCardRender(card: Card, packs: Packs | null) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [busy, setBusy] = useState(false);
-  const pending = useRef(0);
-  useEffect(() => {
-    if (!packs || !canvasRef.current) return;
-    const id = ++pending.current;
-    const handle = requestAnimationFrame(async () => {
-      setBusy(true);
-      const off = document.createElement('canvas');
-      await renderCard(off, card, packs, { scale: PREVIEW_SCALE });
-      if (id !== pending.current || !canvasRef.current) return;
-      const c = canvasRef.current;
-      c.width = off.width;
-      c.height = off.height;
-      c.getContext('2d')!.drawImage(off, 0, 0);
-      setBusy(false);
-    });
-    return () => cancelAnimationFrame(handle);
-  }, [card, packs]);
-  return { canvasRef, busy };
-}
-
-async function exportCard(card: Card, packs: Packs, kind: 'png' | 'jpg') {
+async function exportCard(card: Card, packs: Packs, kind: 'png' | 'jpg', setSymbol?: string) {
   const canvas = document.createElement('canvas');
-  const scale = kind === 'jpg' ? 744 / CARD_W : 1;
-  await renderCard(canvas, card, packs, { scale });
+  await renderCard(canvas, card, packs, { scale: kind === 'jpg' ? 744 / CARD_W : 1, setSymbol });
   const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, kind === 'jpg' ? 'image/jpeg' : 'image/png', 0.95));
   if (!blob) return;
   const fileName = `${card.name.trim() || 'card'}.${kind}`;
@@ -65,21 +45,29 @@ async function exportCard(card: Card, packs: Packs, kind: 'png' | 'jpg') {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function Editor() {
-  const { packs, error } = usePacks();
-  const [card, setCard] = useState<Card>(newCard);
-  const { canvasRef, busy } = useCardRender(card, packs);
+export default function Editor({ card, setCard, packs, store, sets, onSetsChanged, saveState, isNew, onDone, onChangeStyle }: Props) {
   const [exporting, setExporting] = useState(false);
+  const [uploading, setUploading] = useState<string | null>(null);
   const drag = useRef<{ x: number; y: number; ax: number; ay: number } | null>(null);
-
   const set = <K extends keyof Card>(key: K, value: Card[K]) => setCard((c) => ({ ...c, [key]: value }));
+  const cardSet = sets.find((s) => s.id === card.setId);
+  const setSymbol = cardSet?.symbol;
+  const family = familyById(card.family);
+  const style = family?.styles.find((s) => s.id === card.style);
+  const isLand = typeLine(card).includes('Land');
 
-  const onArt = (file: File | undefined) => {
+  const upload = async (file: File | undefined, kind: 'art' | 'symbol') => {
     if (!file) return;
-    setCard((c) => {
-      if (c.art?.src.startsWith('blob:')) URL.revokeObjectURL(c.art.src);
-      return { ...c, art: { src: URL.createObjectURL(file), x: 0, y: 0, zoom: 1 } };
-    });
+    setUploading(kind);
+    try {
+      const ref = await store.uploadImage(await prepareImage(file, kind), kind);
+      if (kind === 'art') setCard((c) => ({ ...c, art: { src: ref, x: 0, y: 0, zoom: 1 } }));
+      else setCard((c) => ({ ...c, setSymbol: ref }));
+    } catch (e) {
+      alert(`Upload failed: ${(e as Error).message}`);
+    } finally {
+      setUploading(null);
+    }
   };
 
   // Drag on the preview to move the art.
@@ -89,112 +77,114 @@ export default function Editor() {
     drag.current = { x: e.clientX, y: e.clientY, ax: card.art.x, ay: card.art.y };
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!drag.current || !card.art) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const dx = (e.clientX - drag.current.x) / rect.width;
-    const dy = (e.clientY - drag.current.y) / rect.height;
     const start = drag.current;
-    setCard((c) => (c.art ? { ...c, art: { ...c.art, x: start.ax + dx, y: start.ay + dy * (CARD_H / CARD_W) * (CARD_W / CARD_H) } } : c));
+    if (!start) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dx = (e.clientX - start.x) / rect.width;
+    const dy = (e.clientY - start.y) / rect.height;
+    setCard((c) => (c.art ? { ...c, art: { ...c.art, x: start.ax + dx, y: start.ay + dy } } : c));
   };
   const onPointerUp = () => { drag.current = null; };
 
   const doExport = async (kind: 'png' | 'jpg') => {
-    if (!packs) return;
     setExporting(true);
-    try { await exportCard(card, packs, kind); } finally { setExporting(false); }
+    try { await exportCard(card, packs, kind, setSymbol); } finally { setExporting(false); }
   };
+
+  const chooseSet = (s: CardSet | null) => setCard((c) => ({ ...c, setId: s?.id ?? null, setCode: s?.code ?? c.setCode }));
 
   return (
     <>
+      <div className="flow-top editor-top">
+        {isNew ? <Steps step={3} total={3} /> : <span className="muted">{family?.name} · {style?.name}</span>}
+        <span className={`save-state ${saveState}`} role="status">
+          {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Not saved' : ''}
+        </span>
+        <button type="button" className="primary done" onClick={onDone}>Done</button>
+      </div>
       <main className="layout">
         <section className="preview" aria-label="Card preview">
-          {error ? (
-            <p className="error">{error}</p>
-          ) : (
-            <canvas
-              ref={canvasRef}
-              className={busy ? 'card busy' : 'card'}
-              width={Math.round(CARD_W * PREVIEW_SCALE)}
-              height={Math.round(CARD_H * PREVIEW_SCALE)}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              aria-label={`Preview of ${card.name}`}
-            />
-          )}
+          <CardCanvas
+            card={card} packs={packs} scale={PREVIEW_SCALE} setSymbol={setSymbol} className="card"
+            onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
+            aria-label={`Preview of ${card.name || 'your card'}`}
+          />
           <div className="actions">
-            <button type="button" className="secondary" disabled={!packs || exporting} onClick={() => doExport('png')}>Full-size PNG</button>
-            <button type="button" className="primary" disabled={!packs || exporting} onClick={() => doExport('jpg')}>Save JPG</button>
+            <button type="button" className="secondary" disabled={exporting} onClick={() => doExport('png')}>Full-size PNG</button>
+            <button type="button" className="primary" disabled={exporting} onClick={() => doExport('jpg')}>Save JPG</button>
           </div>
         </section>
 
         <form className="form" onSubmit={(e) => e.preventDefault()}>
           <fieldset className="group">
             <label className="field">
-              <span>Name</span>
-              <input value={card.name} onChange={(e) => set('name', e.target.value)} />
+              <span>{card.toggles.nickname ? 'True name (small, under the nickname)' : 'Name'}</span>
+              <input value={card.name} placeholder="Card name" onChange={(e) => set('name', e.target.value)} />
             </label>
-            <div className="field">
-              <label htmlFor="cost">Mana cost</label>
-              <input id="cost" value={card.manaCost} onChange={(e) => set('manaCost', e.target.value)} placeholder="{2}{W}{U}" />
-              <div className="mana-keys" role="group" aria-label="Insert mana symbol">
-                {MANA_KEYS.map((k) => (
-                  <button key={k} type="button" className="mana-key" onClick={() => set('manaCost', card.manaCost + `{${k}}`)} aria-label={`Add ${k}`}>
-                    <img src={`/cc/mana/${k.toLowerCase()}.svg`} alt="" />
-                  </button>
-                ))}
-                <button type="button" className="mana-key text" onClick={() => set('manaCost', card.manaCost.replace(/\{[^}]*\}$/, ''))} aria-label="Remove last symbol">⌫</button>
+            {card.toggles.nickname && (
+              <label className="field">
+                <span>Nickname (big, in the title bar)</span>
+                <input value={card.nickname} onChange={(e) => set('nickname', e.target.value)} />
+              </label>
+            )}
+            {!isLand && (
+              <div className="field">
+                <label htmlFor="cost">Mana cost</label>
+                <input id="cost" value={card.manaCost} onChange={(e) => set('manaCost', e.target.value)} placeholder="{2}{W}{U}" />
+                <div className="mana-keys" role="group" aria-label="Insert mana symbol">
+                  {MANA_KEYS.filter((k) => k !== 'T').map((k) => (
+                    <button key={k} type="button" className="mana-key" onClick={() => set('manaCost', card.manaCost + `{${k}}`)} aria-label={`Add ${k}`}>
+                      <img src={`/cc/mana/${k.toLowerCase()}.svg`} alt="" />
+                    </button>
+                  ))}
+                  <button type="button" className="mana-key text" onClick={() => set('manaCost', card.manaCost.replace(/\{[^}]*\}$/, ''))} aria-label="Remove last symbol">⌫</button>
+                </div>
               </div>
-            </div>
+            )}
           </fieldset>
 
           <fieldset className="group">
             <legend>Type line</legend>
             <div className="row three">
-              <label className="field"><span>Supertype</span><input value={card.supertype} onChange={(e) => set('supertype', e.target.value)} /></label>
-              <label className="field"><span>Type</span><input value={card.cardType} onChange={(e) => set('cardType', e.target.value)} /></label>
+              <label className="field"><span>Supertype</span><input value={card.supertype} placeholder="Legendary" onChange={(e) => set('supertype', e.target.value)} /></label>
+              <label className="field"><span>Type</span><input value={card.cardType} list="card-types" onChange={(e) => set('cardType', e.target.value)} /></label>
               <label className="field"><span>Subtype</span><input value={card.subtype} onChange={(e) => set('subtype', e.target.value)} /></label>
             </div>
+            <datalist id="card-types">
+              {['Creature', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Artifact Creature', 'Enchantment Creature', 'Land', 'Kindred Instant', 'Artifact Land'].map((t) => <option key={t} value={t} />)}
+            </datalist>
           </fieldset>
 
           <fieldset className="group">
             <label className="field">
               <span>Rules text</span>
               <textarea rows={5} value={card.rulesText} onChange={(e) => set('rulesText', e.target.value)} />
-              <small>Use {'{T}'}, {'{W}'}, {'{2/U}'}… for symbols and ~ for the card name.</small>
+              <small>Symbols: {'{T}'}, {'{W}'}, {'{2/U}'}, {'{G/P}'}… · ~ = card name · (reminder text) turns italic</small>
             </label>
+            <div className="mana-keys" role="group" aria-label="Insert symbol into rules text">
+              {MANA_KEYS.map((k) => (
+                <button key={k} type="button" className="mana-key" onClick={() => set('rulesText', card.rulesText + `{${k}}`)} aria-label={`Add ${k} to rules text`}>
+                  <img src={`/cc/mana/${k.toLowerCase()}.svg`} alt="" />
+                </button>
+              ))}
+            </div>
             <label className="field">
               <span>Flavor text</span>
               <textarea rows={2} value={card.flavorText} onChange={(e) => set('flavorText', e.target.value)} />
             </label>
-            <div className="row two">
-              <label className="field"><span>Power</span><input value={card.power} onChange={(e) => set('power', e.target.value)} /></label>
-              <label className="field"><span>Toughness</span><input value={card.toughness} onChange={(e) => set('toughness', e.target.value)} /></label>
-            </div>
-          </fieldset>
-
-          <fieldset className="group">
-            <legend>Frame</legend>
-            {/* The floating crown is made for borderless/extended-art frames, so regular frames only offer the standard crown. */}
-            <div className="segmented two" role="radiogroup" aria-label="Legendary">
-              {(['none', 'crown'] as Legendary[]).map((v) => (
-                <button key={v} type="button" role="radio" aria-checked={card.legendary === v} className={card.legendary === v ? 'on' : ''} onClick={() => set('legendary', v)}>
-                  {v === 'none' ? 'Not legendary' : 'Legend crown'}
-                </button>
-              ))}
-            </div>
-            <label className="toggle">
-              <span>Holo stamp</span>
-              <input type="checkbox" role="switch" checked={card.holoStamp} onChange={(e) => set('holoStamp', e.target.checked)} />
-            </label>
+            {!isLand && (
+              <div className="row two">
+                <label className="field"><span>Power</span><input value={card.power} inputMode="numeric" onChange={(e) => set('power', e.target.value)} /></label>
+                <label className="field"><span>Toughness</span><input value={card.toughness} inputMode="numeric" onChange={(e) => set('toughness', e.target.value)} /></label>
+              </div>
+            )}
           </fieldset>
 
           <fieldset className="group">
             <legend>Art</legend>
             <label className="file">
-              <input type="file" accept="image/*" onChange={(e) => onArt(e.target.files?.[0])} />
-              <span>{card.art ? 'Change art' : 'Choose art'}</span>
+              <input type="file" accept="image/*" onChange={(e) => upload(e.target.files?.[0], 'art')} />
+              <span>{uploading === 'art' ? 'Uploading…' : card.art ? 'Change art' : 'Choose art'}</span>
             </label>
             {card.art && (
               <>
@@ -202,7 +192,10 @@ export default function Editor() {
                   <span>Zoom</span>
                   <input type="range" min={1} max={3} step={0.01} value={card.art.zoom} onChange={(e) => set('art', { ...card.art!, zoom: Number(e.target.value) })} />
                 </label>
-                <small>Drag the art on the card to move it.</small>
+                <div className="row two">
+                  <small className="muted">Drag the art on the card to move it.</small>
+                  <button type="button" className="link" onClick={() => set('art', { ...card.art!, x: 0, y: 0, zoom: 1 })}>Reset position</button>
+                </div>
               </>
             )}
             <label className="field"><span>Artist</span><input value={card.artist} onChange={(e) => set('artist', e.target.value)} /></label>
@@ -210,23 +203,49 @@ export default function Editor() {
 
           <fieldset className="group">
             <legend>Set and collector info</legend>
+            <SetPicker store={store} sets={sets} value={card.setId} onChange={chooseSet} onSetsChanged={onSetsChanged} />
             <div className="row three">
               <label className="field"><span>Set code</span><input value={card.setCode} maxLength={4} onChange={(e) => set('setCode', e.target.value.toUpperCase())} /></label>
               <label className="field"><span>Number</span><input value={card.collectorNumber} onChange={(e) => set('collectorNumber', e.target.value)} /></label>
               <label className="field"><span>Of</span><input value={card.setTotal} onChange={(e) => set('setTotal', e.target.value)} /></label>
             </div>
-            <label className="field">
-              <span>Rarity</span>
-              <select value={card.rarity} onChange={(e) => set('rarity', e.target.value as Rarity)}>
-                <option value="C">Common</option>
-                <option value="U">Uncommon</option>
-                <option value="R">Rare</option>
-                <option value="M">Mythic</option>
-                <option value="S">Special</option>
-                <option value="P">Promo</option>
-                <option value="L">Land</option>
-                <option value="T">Token</option>
-              </select>
+            <div className="row two">
+              <label className="field">
+                <span>Rarity</span>
+                <select value={card.rarity} onChange={(e) => set('rarity', e.target.value as Rarity)}>
+                  <option value="C">Common</option>
+                  <option value="U">Uncommon</option>
+                  <option value="R">Rare</option>
+                  <option value="M">Mythic</option>
+                  <option value="S">Special</option>
+                  <option value="P">Promo</option>
+                  <option value="L">Land</option>
+                  <option value="T">Token</option>
+                </select>
+              </label>
+              <label className="field"><span>Language</span><input value={card.language} maxLength={2} onChange={(e) => set('language', e.target.value.toUpperCase())} /></label>
+            </div>
+            <div className="symbol-row">
+              <StoredImage store={store} src={card.setSymbol ?? setSymbol} className="symbol-preview" alt="Set symbol" />
+              <label className="file">
+                <input type="file" accept="image/*" onChange={(e) => upload(e.target.files?.[0], 'symbol')} />
+                <span>{uploading === 'symbol' ? 'Uploading…' : card.setSymbol ? 'Change this card’s symbol' : 'Use a different symbol on this card'}</span>
+              </label>
+            </div>
+            {card.setSymbol && <button type="button" className="link left" onClick={() => set('setSymbol', undefined)}>Use the set’s symbol</button>}
+            <label className="toggle">
+              <span className="toggle-text"><span>Color symbol by rarity</span><small className="muted">Off = use the image exactly as uploaded</small></span>
+              <input type="checkbox" role="switch" checked={card.tintSymbol} onChange={(e) => set('tintSymbol', e.target.checked)} />
+            </label>
+          </fieldset>
+
+          <fieldset className="group">
+            <legend>Frame</legend>
+            <p className="muted small">{family?.name} · {style?.name}{card.legendary !== 'none' ? ' · Legendary' : ''}{card.toggles.nickname ? ' · Nickname' : ''}{card.toggles.snow ? ' · Snow' : ''}{card.toggles.nyx ? ' · Nyx' : ''}{card.toggles.devoid ? ' · Devoid' : ''}</p>
+            <button type="button" className="secondary wide" onClick={onChangeStyle}>Change style and frame</button>
+            <label className="toggle">
+              <span>Holo stamp</span>
+              <input type="checkbox" role="switch" checked={card.holoStamp} onChange={(e) => set('holoStamp', e.target.checked)} />
             </label>
           </fieldset>
         </form>
