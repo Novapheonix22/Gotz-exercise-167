@@ -158,21 +158,20 @@ Creating a card is a short guided setup, then a simple form. The in-depth editor
    | Adventure · Omen · Prepare | Adventure (or reversed), Omen, Prepare |
    | Two halves | Split, Fuse, Aftermath, Flip, Room |
    | Planeswalker | Regular, Tall, Borderless, Extended Art, Compleated, Transform, MDFC |
-   | Saga | Saga, Saga Creature |
+   | Saga · Class · Case | Saga, Saga Creature, Class, Case (all split down the middle) |
    | Battle | (none, goes straight on) |
-   | Class · Case · Level up | Class, Case, Leveler, Station |
+   | Level up · Station | Leveler, Station |
    | Token | Regular, Textless, Tall, Short, Emblem, Marker/Monarch/Initiative… |
    | Showcase & full art | Borderless, Extended Art, Full Art, Etched, Nickname-style showcases, set showcases |
    | Other mechanics | Mutate, Prototype, Spree, Attraction, Conspiracy |
    | Old frames | Alpha, 4th, 5th, 7th, 8th Edition |
-2. **Pick within the group:** only shown when the family has more than one style.
-3. **Frame options:** everything else that changes the frame: Legendary (none / legend crown / floating crown), Nickname bar, Snow, Enchantment (Nyx), Devoid, Miracle, Holo stamp, frame color (auto from mana cost, or pick), border color. Options that don't apply to the chosen style are hidden.
-4. **Fill in the boxes:** the MTG.design-style form, showing only the fields that style needs (e.g. Adventure adds the adventure spell's name, cost, type and text). **Done** saves; **Customize in depth** opens the layer editor.
+2. **Style and frame:** pick the style within the family (skipped choice if there's only one, e.g. Battle), plus every toggle that changes the frame: Legendary (none / legend crown / floating crown), Nickname, Snow, Devoid, Enchantment (Nyx), Miracle, Holo stamp, style-specific ones like "spell on the right side", frame color (auto from mana cost, or pick) and border. Toggles the chosen style has no frames for are hidden (e.g. no Legendary on Fuse or Battle).
+3. **Fill in the boxes:** the MTG.design-style form, showing only the fields that style needs (e.g. Adventure adds the adventure spell's name, cost, type and text). **Done** saves; **Customize in depth** opens the layer editor.
 
-Under the hood, steps 1–3 pick a Card Conjurer frame pack plus the add-on layers, and step 4 fills the text boxes. The family/style table lives in one JSON file, so new frames can be added to the picker without code changes.
+Under the hood, steps 1–2 pick a Card Conjurer frame pack plus the add-on layers, and step 3 fills the text boxes. The family/style table lives in one JSON file, so new frames can be added to the picker without code changes.
 
 ### Phase 2: Editor at site parity for normal cards (3 weeks)
-- [ ] **New card flow** (above): kind picker, style picker, frame options, then the form
+- [ ] **New card flow** (above): kind picker, style and frame toggles, then the form
 - [ ] Editor screen: live preview on top, form below (iPhone); side by side on iPad
 - [ ] **Dark mode**: semantic colors throughout, an Appearance setting (System / Light / Dark), amber accent tuned for contrast in both modes. Mockups: https://claude.ai/artifact/9k5AcW5Xtw3MqdMfEBkK3U
 - [ ] Every field from the site's form: `#`, Total, Set, Lang, Designer, Name, Mana Cost, Super / Type (full dropdown) / Sub, Rarity (all 8), Artist, Rules Text, Flavor Text, Power, Tough
