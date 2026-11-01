@@ -26,3 +26,4 @@ dist-ssr
 # Card Conjurer assets (downloaded by scripts/fetch-assets.mjs)
 .cache
 public/cc
+.env

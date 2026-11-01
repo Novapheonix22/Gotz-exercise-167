@@ -102,3 +102,26 @@ button:disabled { opacity: 0.5; cursor: default; }
 .file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .file span { flex: 1; min-height: 46px; display: grid; place-items: center; border-radius: 12px; background: var(--raised); font-weight: 600; cursor: pointer; }
 .file input:focus-visible + span { outline: 2px solid var(--accent); }
+
+/* Pages: disclaimer, login, account */
+.top { flex-wrap: wrap; }
+.nav { margin-left: auto; display: flex; gap: 4px; padding: 3px; background: var(--raised); border-radius: 12px; }
+.nav button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; font-weight: 600; cursor: pointer; color: var(--text2); }
+.nav button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
+.page.narrow { max-width: 620px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.page h1 { margin: 8px 0 0; font-size: 28px; letter-spacing: -0.4px; }
+.page .lead { margin: 0; color: var(--text2); font-size: 17px; }
+.notice { background: var(--surface); border-radius: 16px; padding: 16px 18px; }
+.notice h2 { margin: 0 0 8px; font-size: 17px; }
+.notice p, .notice li { color: var(--text2); line-height: 1.5; }
+.notice p:last-child { margin-bottom: 0; }
+.notice ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.notice strong { color: var(--text); }
+.notice a, .foot a { color: var(--accent); }
+.wide { width: 100%; min-height: 50px; border: 0; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer; }
+.danger { background: transparent; color: #d0473a; border: 1px solid var(--line) !important; }
+.link { background: none; border: 0; color: var(--accent); font-weight: 600; min-height: 44px; cursor: pointer; }
+.form-error { margin: 0; color: #d0473a; font-weight: 600; }
+.form-info { margin: 0; color: var(--text2); }
+.field-label { font-size: 12px; font-weight: 600; color: var(--text2); }
+.foot { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text2); text-align: center; }

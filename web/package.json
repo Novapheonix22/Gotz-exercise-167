@@ -12,6 +12,7 @@
     "fetch-assets": "NODE_USE_ENV_PROXY=1 node scripts/fetch-assets.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
