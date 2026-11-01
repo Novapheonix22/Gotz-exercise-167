@@ -205,7 +205,11 @@ One `LayoutSpec` + PNG set each. The editor shows the matching extra fields, lik
 - [ ] **Custom sets**: set code, name, symbol, total; library grouped as "Ungrouped Cards" + one section per set (like the site's dashboard)
 - [ ] Auto-fill `#`/Total/Set/symbol when you add a card to a set
 - [ ] Higher-res export (1488 × 2078) and PNG, in addition to the 744 × 1039 JPG
-- [ ] **Untap (untap.in) export**: one-tap export in whatever form Untap accepts for custom cards (to check: image upload vs. image URL in a deck list). If it needs URLs, add an image hosting option.
+- [ ] **Export for online play** (one tap each; exact formats to verify against each program while building):
+  - **Untap (untap.in)**, the main one: whatever Untap accepts for custom cards (image upload vs. image URL in a deck list). If it needs URLs, add an image hosting option.
+  - **Cockatrice**: a custom set (cards XML + card images) to drop into Cockatrice's custom sets folder
+  - **Tabletop Simulator**: a deck sheet image (cards in a grid) plus the saved-object file TTS loads as a deck
+  - **Forge**: custom card script files plus card images in Forge's custom folders
 - [ ] Export a whole set as images; share a card as an editable file (`.card` with embedded art) so friends with the app can open and remix it. This replaces the site's share link.
 - [ ] Search/filter by name, color, type, rarity, set
 
@@ -232,7 +236,6 @@ Each pack = PNGs + manifest + snapshot test. Order:
 - [ ] Not planned unless asked: Flesh and Blood frames
 
 ### Phase 7: Extras (optional)
-- [ ] **Mirror layout** switch: flip the frame images and move every text box, mana cost and P/T to the opposite side (left-handed style cards)
 - [ ] **Prompt challenges** like MTG.design's Moxtober
 - [ ] iCloud sync between devices
 - [ ] iPad niceties: keyboard shortcuts, drag-and-drop art
