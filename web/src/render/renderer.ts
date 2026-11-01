@@ -2,9 +2,9 @@
 
 import type { Card } from '../model/card';
 import { typeLine } from '../model/card';
-import { buildLayers, type Bounds, type FrameLayer, type Packs } from './frameResolver';
+import { buildLayers, layoutPack, type Bounds, type FrameLayer, type Packs } from './frameResolver';
 import type { TextBoxSpec } from './packs';
-import { parseManaCost } from './symbols';
+import { parseManaCost, symbolFile } from './symbols';
 import { ASCENT, layoutText, tokenize, type Layout } from './textLayout';
 
 export const CARD_W = 2010;
@@ -28,7 +28,7 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
         // Keep the canvas exportable when images come from another site (e.g. Supabase storage).
         if (/^https?:/.test(url)) img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
-        img.onerror = () => { images.delete(src); reject(new Error(`Could not load image`)); };
+        img.onerror = () => { images.delete(src); reject(new Error(`Could not load image: ${src.startsWith('data:') ? 'data URL' : src}`)); };
         img.src = url;
       });
     })());
@@ -298,12 +298,16 @@ async function drawSetSymbol(ctx: CanvasRenderingContext2D, card: Card, ref: str
 export async function renderCard(canvas: HTMLCanvasElement, card: Card, packs: Packs, opts: RenderOptions = {}) {
   const symbolRef = card.setSymbol || opts.setSymbol;
   await loadFonts();
-  const version = packs.regular.version!;
+  const version = layoutPack(card, packs).version ?? packs.regular.version!;
   const layers = buildLayers(card, packs);
   // Load everything before touching the canvas so the preview never flickers.
   const composed = await Promise.all(layers.map(composeLayer));
   const symbolFiles = new Set<string>(parseManaCost(card.manaCost).map((t) => t.file));
-  for (const m of `${card.rulesText} ${card.flavorText}`.matchAll(/\{([^}]+)\}/g)) symbolFiles.add(m[1]);
+  for (const t of parseManaCost(card.face2?.manaCost ?? '')) symbolFiles.add(t.file);
+  for (const m of `${card.rulesText} ${card.flavorText} ${card.face2?.rulesText ?? ''}`.matchAll(/\{([^}]+)\}/g)) {
+    const f = symbolFile(m[1]);
+    if (f) symbolFiles.add(f);
+  }
   await Promise.all([...symbolFiles].map((f) => loadImage(symbolSrc(f)).catch(() => null)));
   if (card.art) await loadImage(card.art.src).catch(() => null);
   if (symbolRef) await loadImage(symbolRef).catch(() => null);
@@ -361,6 +365,7 @@ export async function renderCard(canvas: HTMLCanvasElement, card: Card, packs: P
     const vehicle = typeLine(card).includes('Vehicle');
     await drawTextBox(ctx, t.pt, `${card.power}/${card.toughness}`, { color: vehicle ? '#fff' : '#000' });
   }
+  await drawSecondFace(ctx, card, t);
   await drawCollectorInfo(ctx, card);
 
   canvas.width = Math.round(CARD_W * scale);
@@ -368,6 +373,27 @@ export async function renderCard(canvas: HTMLCanvasElement, card: Card, packs: P
   const out = canvas.getContext('2d')!;
   out.imageSmoothingQuality = 'high';
   out.drawImage(off, 0, 0, canvas.width, canvas.height);
+}
+
+/** Adventure / Omen / Prepare: the second spell's name, cost, type and text. */
+async function drawSecondFace(ctx: CanvasRenderingContext2D, card: Card, t: Record<string, TextBoxSpec>) {
+  if (!t.title2 || !t.rules2) return;
+  const f = card.face2;
+  const cost = parseManaCost(f.manaCost).map((s) => `{${s.file}}`).join('');
+  if (t.mana2 && cost) {
+    await drawTextBox(ctx, t.mana2, cost, { shadow: { x: -0.001 * CARD_W, y: 0.0029 * CARD_H } });
+  }
+  if (f.name.trim()) {
+    const manaRight = ((t.mana2?.x ?? 0) + (t.mana2?.width ?? 0)) * CARD_W;
+    const used = cost ? manaCostWidth(f.manaCost, t.mana2 ?? {}) : 0;
+    const titleX = (t.title2.x ?? 0) * CARD_W;
+    const width = Math.min((t.title2.width ?? 1) * CARD_W, cost ? manaRight - used - titleX - CARD_W * 0.008 : Infinity);
+    await drawTextBox(ctx, t.title2, f.name, { color: '#fff', width });
+  }
+  if (t.type2 && f.typeLine.trim()) await drawTextBox(ctx, t.type2, f.typeLine, { color: '#fff' });
+  if (f.rulesText.trim()) {
+    await drawTextBox(ctx, t.rules2, f.rulesText, { centerVertically: true, autoItalic: true, cardName: f.name || card.name });
+  }
 }
 
 async function drawCollectorInfo(ctx: CanvasRenderingContext2D, card: Card) {
@@ -378,7 +404,7 @@ async function drawCollectorInfo(ctx: CanvasRenderingContext2D, card: Card) {
   ctx.font = `${size}px gothammedium`;
   const number = [card.collectorNumber, card.setTotal].filter(Boolean).join('/');
   ctx.fillText(`${number} ${card.rarity}`.trim(), x, 0.9377 * CARD_H + size * 0.85);
-  const line2 = `${card.setCode} • ${card.language}`;
+  const line2 = [card.setCode.trim(), card.language.trim()].filter(Boolean).join(" • ");
   const y2 = 0.9548 * CARD_H + size * 0.85;
   ctx.fillText(line2, x, y2);
   if (card.artist.trim()) {

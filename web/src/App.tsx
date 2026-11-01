@@ -126,7 +126,10 @@ function SignedIn({ session }: { session: Session | null }) {
     setSaveState('saving');
     try {
       const thumb = await makeThumbnail(c, packs, sets.find((s) => s.id === c.setId)?.symbol);
-      await store.saveCard({ ...c, updatedAt: new Date().toISOString() }, thumb);
+      const updatedAt = new Date().toISOString();
+      await store.saveCard({ ...c, updatedAt }, thumb);
+      // Mark the card in memory as saved too, so "New Card" never reuses a finished card.
+      setCardState((cur) => (cur && cur.id === c.id ? { ...cur, updatedAt } : cur));
       setSaveState('saved');
     } catch (e) {
       console.error(e);

@@ -149,12 +149,15 @@ function parsePack(source) {
 // ---------- conversion ----------
 
 async function fetchFrameImage(src) {
-  const png = await download(src, join(CACHE, src));
-  const webpRel = src.replace(/^\//, '').replace(/\.png$/i, '.webp');
+  const buf = await download(src, join(CACHE, src));
+  const isSvg = /\.svg$/i.test(src);
+  const webpRel = src.replace(/^\//, '').replace(/\.(png|svg)$/i, '.webp');
   const outPath = join(OUT, webpRel);
   if (!(await exists(outPath))) {
     await mkdir(dirname(outPath), { recursive: true });
-    await sharp(png).webp({ quality: 90, alphaQuality: 100, effort: 4 }).toFile(outPath);
+    // SVG masks are drawn over the whole card, so rasterize them at full card size.
+    const img = isSvg ? sharp(buf, { density: 300 }).resize(2010, 2814, { fit: 'fill' }) : sharp(buf);
+    await img.webp({ quality: 90, alphaQuality: 100, effort: 4 }).toFile(outPath);
   }
   return '/cc/' + webpRel;
 }
@@ -164,20 +167,23 @@ async function fetchPack(id) {
   const pack = parsePack(js);
   const imageMap = new Map();
   const convert = async (src) => {
-    if (!src || !/\.png$/i.test(src)) return src;
+    if (!src || !/\.(png|svg)$/i.test(src)) return src;
     if (!imageMap.has(src)) imageMap.set(src, await fetchFrameImage(src));
     return imageMap.get(src);
+  };
+  // Card Conjurer occasionally lists an image it doesn't have. Skip those instead of failing the build.
+  const tryConvert = async (src) => {
+    try { return await convert(src); } catch (err) { console.warn(`  skipped ${src}: ${err.message}`); return null; }
   };
   const frames = [];
   for (const f of pack.frames) {
     if (!f || !f.src) continue;
-    frames.push({
-      name: f.name,
-      src: await convert(f.src),
-      masks: f.masks ? await Promise.all(f.masks.map(async (m) => ({ name: m.name, src: await convert(m.src) }))) : undefined,
-      bounds: f.bounds,
-      complementary: f.complementary,
-    });
+    const src = await tryConvert(f.src);
+    if (!src) continue;
+    const masks = f.masks
+      ? (await Promise.all(f.masks.map(async (m) => ({ name: m.name, src: await tryConvert(m.src) })))).filter((m) => m.src)
+      : undefined;
+    frames.push({ name: f.name, src, masks, bounds: f.bounds, complementary: f.complementary });
   }
   const manifest = { id, frames, version: pack.version };
   await mkdir(join(OUT, 'packs'), { recursive: true });

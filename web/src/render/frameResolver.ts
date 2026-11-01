@@ -130,6 +130,22 @@ export interface Packs {
   nickname?: Pack;
   borders?: Pack;
   lands?: Pack;
+  adventure?: Pack;
+  omen?: Pack;
+  prepare?: Pack;
+}
+
+/** Styles that have their own frame pack (layout + frame images). */
+export function stylePack(card: Card, packs: Packs): Pack | undefined {
+  if (card.style === 'adventure') return packs.adventure;
+  if (card.style === 'omen') return packs.omen;
+  if (card.style === 'prepare') return packs.prepare;
+  return undefined;
+}
+
+/** The pack whose text box positions the card uses. */
+export function layoutPack(card: Card, packs: Packs): Pack {
+  return stylePack(card, packs) ?? packs.regular;
 }
 
 /** Pack ids needed to draw regular cards (also read by scripts/fetch-assets.mjs). */
@@ -139,6 +155,12 @@ export const REGULAR_PACK_IDS: Record<keyof Packs, string> = packIds;
 function frameImage(letter: string, card: Card, packs: Packs): PackFrame | undefined {
   const land = letter.length > 1 && letter.endsWith('L');
   const color = base(letter);
+  const own = stylePack(card, packs);
+  if (own) {
+    const name = land ? 'Land' : letterName(letter);
+    return (card.toggles.nyx && !land && letter !== 'L' ? find(own, `${name} Enchantment Frame`) : undefined)
+      ?? find(own, `${name} Frame`) ?? find(own, 'Artifact Frame') ?? find(own, 'Land Frame');
+  }
   if (card.toggles.snow && packs.snow) {
     const f = land ? find(packs.snow, `${letterName(color)} Land Frame`) : find(packs.snow, `${letterName(letter)} Frame`);
     if (f) return f;
@@ -156,6 +178,44 @@ function frameImage(letter: string, card: Card, packs: Packs): PackFrame | undef
     if (f) return f;
   }
   return find(packs.regular, `${letterName(letter)} Frame`) ?? find(packs.regular, 'Artifact Frame');
+}
+
+/** Colors of the second spell's cost, following Card Conjurer's rules for each style. */
+export function secondFaceColors(style: string, cost: string): { colors: string[]; hybrid: boolean } {
+  const text = cost.toUpperCase();
+  const hybrid = text.includes('/');
+  const found = [...new Set(text.split('').filter((ch) => 'WUBRG'.includes(ch)))];
+  const ordered = orderedColors(found as Color[]) as string[];
+  if (style === 'adventure') {
+    if (hybrid) return { colors: found.length > 2 ? ['M'] : found.length === 1 ? found : ['L'], hybrid };
+    return { colors: found.length > 2 ? ['M'] : ordered, hybrid };
+  }
+  return { colors: ordered.length ? ordered : ['A'], hybrid };
+}
+
+type Masked = (letter: string, role: string, maskName: string | null, right?: boolean) => void;
+
+/** The colored box for the second spell (Adventure, Omen, Prepare). */
+function secondFaceLayers(card: Card, masked: Masked) {
+  const { colors, hybrid } = secondFaceColors(card.style, card.face2.manaCost);
+  if (card.style === 'adventure') {
+    if (colors.length === 1) masked(colors[0], 'Adventure', 'Rules (Left)');
+    else if (colors.length >= 2) {
+      masked(colors[0], 'Adventure', 'Rules (Left)');
+      masked(colors[1], 'Adventure', 'Rules (Left, Multicolor)');
+    }
+  } else if (card.style === 'omen' || card.style === 'prepare') {
+    const n = card.style === 'omen' ? 'Omen' : 'Prepare Spell';
+    if (card.style === 'prepare') masked(colors[0], n, `${n} Pinline`);
+    if (colors.length === 1) {
+      if (hybrid) masked('L', n, `${n} Type/Title`);
+      masked(colors[0], n, n);
+    } else {
+      masked(colors[0], n, n);
+      masked(colors[1], n, `${n} (Right Half)`);
+      masked(hybrid && colors.length === 2 ? 'L' : 'M', n, `${n} Type/Title`);
+    }
+  }
 }
 
 /** Layers from bottom to top. */
@@ -188,7 +248,12 @@ export function buildLayers(card: Card, packs: Packs): FrameLayer[] {
   masked(p.frame, 'Frame', null);
   if (p.frameRight) masked(p.frameRight, 'Frame', 'Frame', true);
   masked(p.rules, 'Rules', 'Rules');
-  if (p.rulesRight) masked(p.rulesRight, 'Rules', 'Rules', true);
+  if (p.rulesRight) {
+    // Packs with a side-by-side text box have their own right-half mask for the main text box.
+    if (stylePack(card, packs)?.frames[0]?.masks?.some((m) => m.name === 'Rules (Right Half)')) masked(p.rulesRight, 'Rules', 'Rules (Right Half)');
+    else masked(p.rulesRight, 'Rules', 'Rules', true);
+  }
+  secondFaceLayers(card, masked);
   masked(p.typeTitle, 'Title', 'Title');
   masked(p.typeTitle, 'Type', 'Type');
   masked(p.pinline, 'Pinline', 'Pinline');
@@ -196,7 +261,7 @@ export function buildLayers(card: Card, packs: Packs): FrameLayer[] {
 
   if (p.pt) {
     if (!(card.toggles.devoid && add(packs.devoid, 'Devoid Power/Toughness', 'PT'))) {
-      add(packs.regular, `${letterName(p.pt)} Power/Toughness`, 'PT');
+      if (!add(stylePack(card, packs), `${letterName(p.pt)} Power/Toughness`, 'PT')) add(packs.regular, `${letterName(p.pt)} Power/Toughness`, 'PT');
     }
   }
 

@@ -33,7 +33,16 @@ export const FAMILIES: Family[] = [
     ],
   },
   { id: 'dfc', name: 'Double-faced', meta: 'Transform · Modal DFC', ready: false, diagram: [R(13, 0.7, 30, 42), R(5, 5.3, 30, 42), R(8, 12, 24, 13, true)], supports: all, styles: [] },
-  { id: 'adventure', name: 'Adventure · Omen · Prepare', meta: '3 styles', ready: false, diagram: [card, R(10, 4, 28, 4), R(10, 10, 28, 16), R(10, 28, 28, 3), R(10, 33, 13, 11, true), R(25, 33, 13, 11)], supports: all, styles: [] },
+  {
+    id: 'adventure', name: 'Adventure · Omen · Prepare', meta: 'A second spell inside the card', ready: true,
+    diagram: [card, R(10, 4, 28, 4), R(10, 10, 28, 16), R(10, 28, 28, 3), R(10, 33, 13, 11, true), R(25, 33, 13, 11)],
+    supports: { legendary: true, nickname: true, snow: false, devoid: false, nyx: true },
+    styles: [
+      { id: 'adventure', name: 'Adventure', ready: true, diagram: [card, R(10, 4, 28, 4), R(10, 10, 28, 16), R(10, 28, 28, 3), R(10, 33, 13, 11, true), R(25, 33, 13, 11)] },
+      { id: 'omen', name: 'Omen', ready: true, diagram: [card, R(10, 4, 28, 4), R(10, 10, 28, 16), R(10, 28, 28, 3), R(10, 33, 13, 11, true), R(25, 33, 13, 11)] },
+      { id: 'prepare', name: 'Prepare', ready: true, diagram: [card, R(10, 4, 28, 4), R(10, 10, 28, 16), R(10, 28, 28, 3), R(10, 33, 13, 11), R(25, 33, 13, 11, true)] },
+    ],
+  },
   { id: 'halves', name: 'Two halves', meta: 'Split · Fuse · Aftermath · Flip · Room', ready: false, diagram: [card, R(10, 4, 28, 19), R(10, 25, 28, 19, true)], supports: none, styles: [] },
   { id: 'planeswalker', name: 'Planeswalker', meta: 'Regular, tall, borderless…', ready: false, diagram: [card, R(10, 4, 28, 4), R(10, 10, 28, 20), R(10, 32, 28, 3, true), R(10, 36.5, 28, 3, true), R(10, 41, 28, 3, true)], supports: none, styles: [] },
   { id: 'saga', name: 'Saga · Class · Case', meta: 'Split down the middle', ready: false, diagram: [card, R(10, 4, 28, 4), R(10, 10, 13, 34, true), R(25, 10, 13, 34)], supports: none, styles: [] },

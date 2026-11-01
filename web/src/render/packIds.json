@@ -8,5 +8,8 @@
   "devoid": "M15Devoid",
   "nickname": "M15Nickname-2",
   "borders": "M15Borders",
-  "lands": "M15Lands"
+  "lands": "M15Lands",
+  "adventure": "Adventure",
+  "omen": "Omen",
+  "prepare": "Prepare"
 }

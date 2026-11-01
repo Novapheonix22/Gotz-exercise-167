@@ -21,6 +21,14 @@ export interface FrameToggles {
   nyx: boolean;
 }
 
+/** The second spell on Adventure, Omen and Prepare cards. */
+export interface SecondFace {
+  name: string;
+  manaCost: string;
+  typeLine: string;
+  rulesText: string;
+}
+
 export interface Card {
   id: string;
   /** New card flow choices. */
@@ -52,6 +60,8 @@ export interface Card {
   language: string;
   artist: string;
   designer: string;
+
+  face2: SecondFace;
 
   art?: ArtState;
   /** Set symbol image reference (overrides the set's symbol), same format as art src. */
@@ -104,13 +114,21 @@ export function blankCard(family = 'normal', style = 'regular'): Card {
     artist: '',
     designer: '',
     tintSymbol: true,
+    face2: { name: '', manaCost: '', typeLine: defaultFace2Type(style), rulesText: '' },
   };
+}
+
+export function defaultFace2Type(style: string) {
+  if (style === 'adventure') return 'Sorcery — Adventure';
+  if (style === 'omen') return 'Sorcery — Omen';
+  if (style === 'prepare') return 'Sorcery';
+  return '';
 }
 
 /** Fill in fields missing from cards saved by older versions. */
 export function upgradeCard(raw: Partial<Card> & { id: string }): Card {
   const base = blankCard(raw.family, raw.style);
-  return { ...base, ...raw, toggles: { ...base.toggles, ...(raw.toggles ?? {}) } };
+  return { ...base, ...raw, toggles: { ...base.toggles, ...(raw.toggles ?? {}) }, face2: { ...base.face2, ...(raw.face2 ?? {}) } };
 }
 
 export function sampleCard(): Card {

@@ -14,6 +14,7 @@ const PREVIEW_SCALE = 0.4;
 const COLOR_KEYS = ['W', 'U', 'B', 'R', 'G', 'C', 'X', 'S'];
 const RULES_KEYS = ['T', 'Q', 'W', 'U', 'B', 'R', 'G', 'C', 'X', 'E'];
 const GENERIC = Array.from({ length: 21 }, (_, i) => i);
+const SECOND_FACE: Record<string, string> = { adventure: 'Adventure spell', omen: 'Omen spell', prepare: 'Prepare spell' };
 const genericOf = (cost: string) => cost.match(/\{(\d+)\}/)?.[1];
 
 export type SaveState = 'saved' | 'saving' | 'error' | 'unsaved';
@@ -54,6 +55,7 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
   const [uploading, setUploading] = useState<string | null>(null);
   const drag = useRef<{ x: number; y: number; ax: number; ay: number } | null>(null);
   const set = <K extends keyof Card>(key: K, value: Card[K]) => setCard((c) => ({ ...c, [key]: value }));
+  const setFace2 = <K extends keyof Card['face2']>(key: K, value: Card['face2'][K]) => setCard((c) => ({ ...c, face2: { ...c.face2, [key]: value } }));
   const cardSet = sets.find((s) => s.id === card.setId);
   const setSymbol = cardSet?.symbol;
   const family = familyById(card.family);
@@ -211,6 +213,32 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
               </div>
             )}
           </fieldset>
+
+          {SECOND_FACE[card.style] && (
+            <fieldset className="group">
+              <legend>{SECOND_FACE[card.style]}</legend>
+              <div className="row two">
+                <label className="field"><span>Name</span><input value={card.face2.name} onChange={(e) => setFace2('name', e.target.value)} /></label>
+                <label className="field"><span>Mana cost</span>
+                  <input value={card.face2.manaCost} placeholder="{1}{R}" onChange={(e) => setFace2('manaCost', e.target.value)}
+                    onBlur={(e) => setFace2('manaCost', normalizeManaCost(e.target.value))} />
+                </label>
+              </div>
+              <div className="mana-keys" role="group" aria-label={`Add mana to the ${SECOND_FACE[card.style]}`}>
+                {COLOR_KEYS.map((k) => (
+                  <button key={k} type="button" className="mana-key" onClick={() => setFace2('manaCost', normalizeManaCost(card.face2.manaCost + `{${k}}`))} aria-label={`Add ${k} to ${SECOND_FACE[card.style]}`}>
+                    <img src={`/cc/mana/${k.toLowerCase()}.svg`} alt="" />
+                  </button>
+                ))}
+                <button type="button" className="mana-key text" onClick={() => setFace2('manaCost', card.face2.manaCost.replace(/\{[^}]*\}$/, ''))} aria-label="Remove last symbol">⌫</button>
+              </div>
+              <label className="field"><span>Type line</span><input value={card.face2.typeLine} onChange={(e) => setFace2('typeLine', e.target.value)} /></label>
+              <label className="field">
+                <span>Text</span>
+                <textarea rows={3} value={card.face2.rulesText} onChange={(e) => setFace2('rulesText', e.target.value)} />
+              </label>
+            </fieldset>
+          )}
 
           <fieldset className="group">
             <legend>Art</legend>

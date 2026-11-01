@@ -1,4 +1,4 @@
-import type { Border, Card, CardSet, FrameColor, FrameToggles, Legendary } from '../model/card';
+import { defaultFace2Type, type Border, type Card, type CardSet, type FrameColor, type FrameToggles, type Legendary } from '../model/card';
 import type { Packs } from '../render/frameResolver';
 import type { Store } from '../data/store';
 import { familyById } from '../flow/families';
@@ -40,6 +40,9 @@ export default function StyleFrame({ card, setCard, packs, store, sets, onSetsCh
   const set = <K extends keyof Card>(k: K, v: Card[K]) => setCard({ ...card, [k]: v });
   const pickStyle = (id: string) => {
     const next = { ...card, style: id };
+    // Keep the second spell's type line in step with the style unless it was edited.
+    const oldDefault = defaultFace2Type(card.style);
+    if (!card.face2.typeLine || card.face2.typeLine === oldDefault) next.face2 = { ...card.face2, typeLine: defaultFace2Type(id) };
     if (id === 'land') { next.cardType = 'Land'; next.power = ''; next.toughness = ''; }
     if (id === 'vehicle') { next.cardType = 'Artifact'; next.subtype = next.subtype.includes('Vehicle') ? next.subtype : `Vehicle ${next.subtype}`.trim(); }
     if (id === 'regular' && (card.style === 'land' || card.style === 'vehicle')) {
