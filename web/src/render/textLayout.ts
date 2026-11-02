@@ -33,6 +33,9 @@ export interface TokenizeOptions {
 
 export function tokenize(raw: string, opts: TokenizeOptions = {}): Token[] {
   let text = raw
+    // Card Conjurer shorthands: /// = flavor divider, // = new line
+    .replace(/\/\/\//g, '{flavor}')
+    .replace(/\/\//g, '{lns}')
     .replace(/\{cardname\}|~/gi, opts.cardName ?? '')
     .replace(/<i>/gi, '{i}')
     .replace(/<\/i>/gi, '{/i}')

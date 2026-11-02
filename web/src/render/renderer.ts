@@ -3,12 +3,16 @@
 import type { Card } from '../model/card';
 import { typeLine } from '../model/card';
 import { buildLayers, layoutPack, type Bounds, type FrameLayer, type Packs } from './frameResolver';
+import { styleById } from '../flow/styles';
 import type { TextBoxSpec } from './packs';
 import { parseManaCost, symbolFile } from './symbols';
 import { ASCENT, layoutText, tokenize, type Layout } from './textLayout';
 
 export const CARD_W = 2010;
 export const CARD_H = 2814;
+/** Canvas size of the card being drawn (battles are landscape). Renders run one at a time, so this is safe. */
+let W = CARD_W;
+let H = CARD_H;
 
 // ---------- assets ----------
 
@@ -42,6 +46,11 @@ const FONTS: [string, string, FontFaceDescriptors?][] = [
   ['mplantin', '/cc/fonts/mplantin.ttf'],
   ['mplantini', '/cc/fonts/mplantin-i.ttf'],
   ['gothammedium', '/cc/fonts/gotham-medium.ttf'],
+  ['matrix', '/cc/fonts/matrix.ttf'],
+  ['matrixb', '/cc/fonts/matrix-b.ttf'],
+  ['matrixbsc', '/cc/fonts/Matrix%20Bold%20Small%20Caps.ttf'],
+  ['plantinsemibold', '/cc/fonts/plantin-semibold.otf'],
+  ['goudymedieval', '/cc/fonts/goudy-medieval.ttf'],
 ];
 let fontsReady: Promise<void> | null = null;
 export function loadFonts(): Promise<void> {
@@ -60,18 +69,18 @@ const layerCache = new Map<string, Promise<CanvasImageSource>>();
 
 /** A layer with its masks applied, as a full-card-size image. Cached. */
 function composeLayer(layer: FrameLayer): Promise<CanvasImageSource> {
-  const key = JSON.stringify([layer.src, layer.masks, layer.bounds]);
+  const key = JSON.stringify([layer.src, layer.masks, layer.bounds, W, H]);
   if (!layerCache.has(key)) {
     layerCache.set(key, (async () => {
       const img = await loadImage(layer.src);
       if (!layer.masks.length) return img;
       const c = document.createElement('canvas');
-      c.width = CARD_W;
-      c.height = CARD_H;
+      c.width = W;
+      c.height = H;
       const ctx = c.getContext('2d')!;
       drawInBounds(ctx, img, layer.bounds);
       ctx.globalCompositeOperation = 'destination-in';
-      for (const m of layer.masks) ctx.drawImage(await loadImage(m), 0, 0, CARD_W, CARD_H);
+      for (const m of layer.masks) ctx.drawImage(await loadImage(m), 0, 0, W, H);
       return c;
     })());
   }
@@ -79,14 +88,14 @@ function composeLayer(layer: FrameLayer): Promise<CanvasImageSource> {
 }
 
 function drawInBounds(ctx: CanvasRenderingContext2D, img: CanvasImageSource, b?: Bounds) {
-  if (!b) ctx.drawImage(img, 0, 0, CARD_W, CARD_H);
-  else ctx.drawImage(img, b.x * CARD_W, b.y * CARD_H, b.width * CARD_W, b.height * CARD_H);
+  if (!b) ctx.drawImage(img, 0, 0, W, H);
+  else ctx.drawImage(img, b.x * W, b.y * H, b.width * W, b.height * H);
 }
 
 // ---------- art ----------
 
 function drawPlaceholderArt(ctx: CanvasRenderingContext2D, b: Bounds) {
-  const x = b.x * CARD_W, y = b.y * CARD_H, w = b.width * CARD_W, h = b.height * CARD_H;
+  const x = b.x * W, y = b.y * H, w = b.width * W, h = b.height * H;
   const sky = ctx.createLinearGradient(0, y, 0, y + h);
   sky.addColorStop(0, '#2b2a4a');
   sky.addColorStop(1, '#c98a5a');
@@ -113,10 +122,10 @@ function drawPlaceholderArt(ctx: CanvasRenderingContext2D, b: Bounds) {
 async function drawArt(ctx: CanvasRenderingContext2D, card: Card, b: Bounds) {
   if (!card.art) return drawPlaceholderArt(ctx, b);
   const img = await loadImage(card.art.src);
-  const bx = b.x * CARD_W, by = b.y * CARD_H, bw = b.width * CARD_W, bh = b.height * CARD_H;
+  const bx = b.x * W, by = b.y * H, bw = b.width * W, bh = b.height * H;
   const cover = Math.max(bw / img.naturalWidth, bh / img.naturalHeight) * card.art.zoom;
   const w = img.naturalWidth * cover, h = img.naturalHeight * cover;
-  const cx = bx + bw / 2 + card.art.x * CARD_W, cy = by + bh / 2 + card.art.y * CARD_H;
+  const cx = bx + bw / 2 + card.art.x * W, cy = by + bh / 2 + card.art.y * H;
   ctx.save();
   ctx.beginPath();
   ctx.rect(bx, by, bw, bh);
@@ -128,7 +137,8 @@ async function drawArt(ctx: CanvasRenderingContext2D, card: Card, b: Bounds) {
 // ---------- text ----------
 
 const FAMILY: Record<string, string> = {
-  belerenb: 'belerenb', belerenbsc: 'belerenbsc', mplantin: 'mplantin', gothammedium: 'gothammedium',
+  belerenb: 'belerenb', belerenbsc: 'belerenbsc', mplantin: 'mplantin', mplantini: 'mplantini', gothammedium: 'gothammedium',
+  matrix: 'matrix', matrixb: 'matrixb', matrixbsc: 'matrixbsc', plantinsemibold: 'plantinsemibold', goudymedieval: 'goudymedieval',
 };
 
 function fontFor(spec: TextBoxSpec, italic: boolean, size: number) {
@@ -155,11 +165,15 @@ interface DrawTextOptions {
 
 async function drawTextBox(ctx: CanvasRenderingContext2D, spec: TextBoxSpec, text: string, o: DrawTextOptions = {}): Promise<Layout | null> {
   if (!text.trim()) return null;
-  const x = (spec.x ?? 0) * CARD_W;
-  const y = ((spec.y ?? 0) + (o.padTop ?? 0)) * CARD_H;
-  const width = o.width ?? (spec.width ?? 1) * CARD_W;
-  const height = ((spec.height ?? 1) - (o.padTop ?? 0) - (o.padBottom ?? 0)) * CARD_H;
-  const size = (spec.size ?? 0.038) * CARD_H;
+  // Rotated boxes (split cards, rooms, flip cards) draw around their anchor point, like Card Conjurer.
+  const rotation = (spec as { rotation?: number }).rotation ?? 0;
+  const anchorX = (spec.x ?? 0) * W;
+  const anchorY = (spec.y ?? 0) * H;
+  const x = rotation ? 0 : anchorX;
+  const y = (rotation ? 0 : anchorY) + (o.padTop ?? 0) * H;
+  const width = o.width ?? (spec.width ?? 1) * W;
+  const height = ((spec.height ?? 1) - (o.padTop ?? 0) - (o.padBottom ?? 0)) * H;
+  const size = (spec.size ?? 0.038) * H;
 
   const tokens = tokenize(text, { cardName: o.cardName, autoItalicReminder: o.autoItalic, italic: o.italic });
   const measure = (t: string, italic: boolean, s: number) => { ctx.font = fontFor(spec, italic, s); return ctx.measureText(t).width; };
@@ -168,7 +182,11 @@ async function drawTextBox(ctx: CanvasRenderingContext2D, spec: TextBoxSpec, tex
   });
 
   ctx.save();
-  ctx.fillStyle = o.color ?? '#000';
+  if (rotation) {
+    ctx.translate(anchorX, anchorY);
+    ctx.rotate((rotation * Math.PI) / 180);
+  }
+  ctx.fillStyle = o.color ?? (spec as { color?: string }).color ?? '#000';
   ctx.textBaseline = 'alphabetic';
   if (o.textShadow) {
     ctx.shadowColor = '#000';
@@ -209,7 +227,7 @@ async function drawTextBox(ctx: CanvasRenderingContext2D, spec: TextBoxSpec, tex
 
 function manaCostWidth(cost: string, spec: TextBoxSpec) {
   const n = parseManaCost(cost).length;
-  const size = (spec.size ?? 0.043) * CARD_H;
+  const size = (spec.size ?? 0.043) * H;
   return n * size * 0.86;
 }
 
@@ -241,14 +259,14 @@ async function drawSetSymbol(ctx: CanvasRenderingContext2D, card: Card, ref: str
   if (!ref || !b) return 0;
   const img = await loadImage(ref).catch(() => null);
   if (!img || !img.naturalWidth) return 0;
-  const h = b.height * CARD_H;
-  const maxW = b.width * CARD_W;
+  const h = b.height * H;
+  const maxW = b.width * W;
   let w = h * (img.naturalWidth / img.naturalHeight);
   let dh = h;
   if (w > maxW) { dh = h * (maxW / w); w = maxW; }
-  const right = b.x * CARD_W;
+  const right = b.x * W;
   const x = right - w;
-  const y = b.y * CARD_H - dh / 2;
+  const y = b.y * H - dh / 2;
 
   if (!card.tintSymbol) {
     ctx.drawImage(img, x, y, w, dh);
@@ -295,7 +313,25 @@ async function drawSetSymbol(ctx: CanvasRenderingContext2D, card: Card, ref: str
   return w;
 }
 
-export async function renderCard(canvas: HTMLCanvasElement, card: Card, packs: Packs, opts: RenderOptions = {}) {
+let renderQueue: Promise<unknown> = Promise.resolve();
+
+export function renderCard(canvas: HTMLCanvasElement, card: Card, packs: Packs, opts: RenderOptions = {}): Promise<void> {
+  // One render at a time: the canvas size (W/H) is shared module state.
+  const run = renderQueue.then(() => renderCardNow(canvas, card, packs, opts));
+  renderQueue = run.catch(() => undefined);
+  return run;
+}
+
+/** Canvas size for a style: battles are landscape. */
+export function cardSize(card: Card): [number, number] {
+  return card.style === 'battle' ? [CARD_H, CARD_W] : [CARD_W, CARD_H];
+}
+
+const STANDARD_KEYS = new Set(['mana', 'title', 'type', 'pt', 'mana2', 'title2', 'type2', 'rules2']);
+
+async function renderCardNow(canvas: HTMLCanvasElement, card: Card, packs: Packs, opts: RenderOptions) {
+  [W, H] = cardSize(card);
+  const def = styleById(card.style);
   const symbolRef = card.setSymbol || opts.setSymbol;
   await loadFonts();
   const version = layoutPack(card, packs).version ?? packs.regular.version!;
@@ -304,7 +340,8 @@ export async function renderCard(canvas: HTMLCanvasElement, card: Card, packs: P
   const composed = await Promise.all(layers.map(composeLayer));
   const symbolFiles = new Set<string>(parseManaCost(card.manaCost).map((t) => t.file));
   for (const t of parseManaCost(card.face2?.manaCost ?? '')) symbolFiles.add(t.file);
-  for (const m of `${card.rulesText} ${card.flavorText} ${card.face2?.rulesText ?? ''}`.matchAll(/\{([^}]+)\}/g)) {
+  const allText = `${card.rulesText} ${card.flavorText} ${card.face2?.rulesText ?? ''} ${Object.values(card.extra ?? {}).join(' ')}`;
+  for (const m of allText.matchAll(/\{([^}]+)\}/g)) {
     const f = symbolFile(m[1]);
     if (f) symbolFiles.add(f);
   }
@@ -314,65 +351,310 @@ export async function renderCard(canvas: HTMLCanvasElement, card: Card, packs: P
 
   const scale = opts.scale ?? 1;
   const off = document.createElement('canvas');
-  off.width = CARD_W;
-  off.height = CARD_H;
+  off.width = W;
+  off.height = H;
   const ctx = off.getContext('2d')!;
+
+  // Text boxes, adjusted by style-specific layouts (planeswalker abilities, saga chapters, class levels).
+  const t: Record<string, TextBoxSpec> = { ...version.text };
+  const special = def?.special ?? null;
+  const pw = special?.startsWith('planeswalker') ? planeswalkerLayout(card, t, special) : null;
+  const saga = special === 'saga' ? sagaLayout(card, t) : null;
+  const cls = card.style === 'class' ? classLayout(card, t) : null;
 
   // Masked layers are pre-composed at full card size; plain layers are drawn at their bounds.
   ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  ctx.fillRect(0, 0, W, H);
   if (version.artBounds) await drawArt(ctx, card, version.artBounds);
+  if (version.artBounds && def?.art2Offset) await drawArt(ctx, card, { ...version.artBounds, y: version.artBounds.y + def.art2Offset });
+  if (pw) await drawPlaneswalkerBackground(ctx, pw);
   for (let i = 0; i < layers.length; i++) {
     const l = layers[i];
-    if (l.masks.length) ctx.drawImage(composed[i], 0, 0, CARD_W, CARD_H);
+    if (l.masks.length) ctx.drawImage(composed[i], 0, 0, W, H);
     else drawInBounds(ctx, composed[i], l.bounds);
   }
+  if (pw) await drawPlaneswalkerBadges(ctx, pw);
+  if (saga) await drawSagaChapters(ctx, saga);
+  if (cls) await drawClassHeaders(ctx, cls);
 
-  const t = version.text;
   // Mana cost (right-aligned, with symbol shadows)
   if (t.mana) {
     await drawTextBox(ctx, t.mana, parseManaCost(card.manaCost).map((s) => `{${s.file}}`).join(''), {
-      shadow: { x: (t.mana.shadowX ?? 0) * CARD_W, y: (t.mana.shadowY ?? 0) * CARD_H },
+      shadow: { x: (t.mana.shadowX ?? 0) * W, y: (t.mana.shadowY ?? 0) * H },
     });
   }
   if (t.title) {
-    const manaLeft = (t.mana?.width ?? 0.93) * CARD_W - manaCostWidth(card.manaCost, t.mana ?? {});
-    const titleX = (t.title.x ?? 0) * CARD_W;
-    const width = Math.min((t.title.width ?? 1) * CARD_W, manaLeft - titleX - CARD_W * 0.01);
+    const rotated = (t.title as { rotation?: number }).rotation;
+    const manaLeft = (t.mana?.width ?? 0.93) * W - manaCostWidth(card.manaCost, t.mana ?? {});
+    const titleX = rotated ? 0 : (t.title.x ?? 0) * W;
+    const width = rotated ? undefined : Math.min((t.title.width ?? 1) * W, manaLeft - titleX - W * 0.01);
     // With a nickname, the big title shows the nickname and the true name goes underneath (Card Conjurer's layout).
     const nick = card.toggles.nickname && card.nickname.trim();
-    await drawTextBox(ctx, t.title, nick ? card.nickname : card.name, { width });
-    if (nick && card.name.trim()) {
+    // Godzilla-style showcase packs have their own big nickname box; the title box holds the true name.
+    const titleText = t.nickname ? (card.nickname.trim() ? card.name : '') : nick ? card.nickname : card.name;
+    await drawTextBox(ctx, t.title, titleText, { width });
+    if (nick && card.name.trim() && !t.nickname) {
       await drawTextBox(ctx, NICKNAME_TRUE_NAME, card.name, {
-        color: '#fff', shadow: undefined, textShadow: { x: 0.0014 * CARD_W, y: 0.001 * CARD_H },
+        color: '#fff', shadow: undefined, textShadow: { x: 0.0014 * W, y: 0.001 * H },
       });
     }
   }
   const symbolWidth = await drawSetSymbol(ctx, card, symbolRef, version.setSymbolBounds);
   if (t.type) {
-    const full = (t.type.width ?? 1) * CARD_W;
-    await drawTextBox(ctx, t.type, typeLine(card), { width: full - (symbolWidth ? symbolWidth + CARD_W * 0.012 : 0) });
+    const full = (t.type.width ?? 1) * W;
+    const rotated = (t.type as { rotation?: number }).rotation;
+    await drawTextBox(ctx, t.type, typeLine(card), { width: rotated ? undefined : full - (symbolWidth ? symbolWidth + W * 0.012 : 0) });
   }
-  if (t.rules) {
+  const rulesKey = def?.mainRules ?? 'rules';
+  if (t[rulesKey]) {
     const body = card.flavorText.trim() ? `${card.rulesText}{flavor}${card.flavorText}` : card.rulesText;
     const hasPT = !!(card.power.trim() || card.toughness.trim());
-    await drawTextBox(ctx, t.rules, body, {
+    const plain = !def || def.pack === 'M15Regular-1';
+    await drawTextBox(ctx, t[rulesKey], body, {
       centerVertically: true, autoItalic: true, cardName: card.name,
-      padTop: 0.008, padBottom: hasPT ? 0.03 : 0.012,
+      padTop: plain ? 0.008 : 0, padBottom: plain ? (hasPT ? 0.03 : 0.012) : 0,
     });
   }
   if (t.pt && (card.power.trim() || card.toughness.trim())) {
     const vehicle = typeLine(card).includes('Vehicle');
-    await drawTextBox(ctx, t.pt, `${card.power}/${card.toughness}`, { color: vehicle ? '#fff' : '#000' });
+    await drawTextBox(ctx, t.pt, `${card.power}/${card.toughness}`, { color: vehicle ? '#fff' : undefined });
   }
   await drawSecondFace(ctx, card, t);
+
+  // Every other box the pack defines: abilities, chapters, levels, loyalty, defense, reminders…
+  for (const [key, spec] of Object.entries(t)) {
+    if (STANDARD_KEYS.has(key) || key === rulesKey || key === 'rules') continue;
+    if (key === 'nickname') {
+      // Godzilla-style showcase: the big bar shows the nickname, the true name sits in the title box.
+      continue;
+    }
+    const text = extraText(card, key, spec);
+    if (!text.trim()) continue;
+    await drawTextBox(ctx, spec, text, { centerVertically: !spec.oneLine, autoItalic: true, cardName: card.name });
+  }
+  if (t.nickname) await drawTextBox(ctx, t.nickname, card.nickname.trim() || card.name, {});
   await drawCollectorInfo(ctx, card);
 
-  canvas.width = Math.round(CARD_W * scale);
-  canvas.height = Math.round(CARD_H * scale);
+  canvas.width = Math.round(W * scale);
+  canvas.height = Math.round(H * scale);
   const out = canvas.getContext('2d')!;
   out.imageSmoothingQuality = 'high';
   out.drawImage(off, 0, 0, canvas.width, canvas.height);
+}
+
+/** Text for a style-specific box: what the user typed, a value filled in from the back face, or the pack's default. */
+export function extraText(card: Card, key: string, spec?: TextBoxSpec): string {
+  const typed = card.extra?.[key];
+  if (typed !== undefined && typed !== '') return typed;
+  const back = card.back;
+  if (back) {
+    if (key === 'flipsideType') return typeLine(back).split(' — ')[0];
+    if (key === 'flipSideReminder') return parseManaCost(back.manaCost).map((s) => `{${s.file}}`).join('') || (back.rulesText.split('\n')[0] ?? '');
+    if (key === 'reminder' && card.style === 'transform' && (back.power || back.toughness)) return `${back.power}/${back.toughness}`;
+  }
+  if (key.startsWith('ability') || key.startsWith('cost') || key === 'loyalty' || key === 'defense') return typed ?? '';
+  return typed ?? ((spec as { text?: string })?.text ?? '');
+}
+
+// ---------- planeswalkers ----------
+
+interface PwLayout {
+  boxes: { y: number; height: number; cost: string }[];
+  x: number; width: number;
+  badgeY: number[];
+  mask: string;
+}
+
+const PW_BADGE_Y = [
+  [[0.7467], [0.6953, 0.822], [0.6639, 0.7467, 0.8362], [0.6505, 0.72, 0.7905, 0.861]],
+  [[0.72], [0.6391, 0.801], [0.5986, 0.72, 0.8415], [0.5986, 0.6796, 0.7605, 0.8415]],
+];
+
+/** Lay out planeswalker abilities the way Card Conjurer does; adjusts the ability text boxes in `t`. */
+function planeswalkerLayout(card: Card, t: Record<string, TextBoxSpec>, special: string): PwLayout | null {
+  if (!t.ability0) return null;
+  const tall = special === 'planeswalkerTall' ? 1 : 0;
+  // Abilities show in order; the count runs to the last one with any text or cost (3 when empty).
+  const filled = [0, 1, 2, 3].filter((i) => (card.extra[`ability${i}`] ?? '').trim() || (card.extra[`cost${i}`] ?? '').trim());
+  const count = filled.length ? filled[filled.length - 1] + 1 : 3;
+  // Each ability box runs halfway to its neighbours' loyalty badges, so text and badges line up.
+  const badges = PW_BADGE_Y[tall][count - 1];
+  const startY = t.ability0.y ?? 0.62;
+  const bottom = (t.loyalty?.y ?? 0.9) - 0.005;
+  const edges = [startY, ...badges.slice(1).map((b, i) => (badges[i] + b) / 2), bottom];
+  const boxes: PwLayout['boxes'] = [];
+  for (let n = 0; n < 4; n++) {
+    const key = `ability${n}`;
+    const base = t[key] ?? t.ability0;
+    if (n < count) {
+      const cost = (card.extra[`cost${n}`] ?? '').trim();
+      const y = edges[n];
+      const height = edges[n + 1] - edges[n];
+      t[key] = {
+        ...base,
+        y, height,
+        x: cost ? base.x : (base.x ?? 0) - 0.044,
+        width: cost ? base.width : (base.width ?? 0) + 0.044,
+      };
+      boxes.push({ y, height, cost });
+    } else {
+      t[key] = { ...base, height: 0, y: 2 };
+    }
+  }
+  return {
+    boxes,
+    x: 0.1167,
+    width: special === 'planeswalkerTransform' ? 0.8334 : 0.8094,
+    badgeY: PW_BADGE_Y[tall][count - 1],
+    mask: tall ? '/cc/img/frames/planeswalker/tall/planeswalkerTallMaskRules.webp'
+      : special === 'planeswalkerTransform' ? '/cc/img/frames/planeswalker/transform/textFront.webp'
+        : '/cc/img/frames/planeswalker/text.webp',
+  };
+}
+
+async function drawPlaneswalkerBackground(ctx: CanvasRenderingContext2D, pw: PwLayout) {
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d')!;
+  const odd = await loadImage('/cc/img/frames/planeswalker/abilityLineOdd.webp').catch(() => null);
+  const even = await loadImage('/cc/img/frames/planeswalker/abilityLineEven.webp').catch(() => null);
+  const tr = 0.0048 * H;
+  pw.boxes.forEach((b, i) => {
+    const x = pw.x * W, w = pw.width * W;
+    let y = b.y * H, h = b.height * H;
+    if (i === 0) { y -= 0.1 * H; h += 0.1 * H; } else if (i === pw.boxes.length - 1) h += 0.5 * H;
+    g.globalAlpha = i % 2 === 0 ? 0.608 : 0.706;
+    g.fillStyle = i % 2 === 0 ? '#ffffff' : '#a4a4a4';
+    g.fillRect(x, y + tr, w, h - 2 * tr);
+    g.globalAlpha = 1;
+    const line = i % 2 === 0 ? odd : even;
+    if (line) g.drawImage(line, x, y + h - tr, w, 2 * tr);
+  });
+  const mask = await loadImage(pw.mask).catch(() => null);
+  if (mask) {
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(mask, 0, 0, W, H);
+  }
+  ctx.drawImage(c, 0, 0);
+}
+
+async function drawPlaneswalkerBadges(ctx: CanvasRenderingContext2D, pw: PwLayout) {
+  const [plus, minus, neutral] = await Promise.all(['Plus', 'Minus', 'Neutral'].map((n) => loadImage(`/cc/img/frames/planeswalker/planeswalker${n}.webp`).catch(() => null)));
+  ctx.save();
+  ctx.fillStyle = '#fff';
+  ctx.font = `${0.0286 * H}px belerenbsc`;
+  ctx.textAlign = 'center';
+  pw.boxes.forEach((b, i) => {
+    const v = b.cost;
+    if (!v) return;
+    const y = (pw.badgeY[i] ?? b.y + b.height / 2) * H;
+    if (v.includes('+')) {
+      if (plus) ctx.drawImage(plus, 0.0294 * W, y - 0.0258 * H, 0.14 * W, 0.0724 * H);
+      ctx.fillText(v, 0.1027 * W, y + 0.0172 * H);
+    } else if (v.includes('-') || v.includes('−')) {
+      if (minus) ctx.drawImage(minus, 0.028 * W, y - 0.0153 * H, 0.1414 * W, 0.0705 * H);
+      ctx.fillText(v.replace('-', '−'), 0.1027 * W, y + 0.0181 * H);
+    } else {
+      if (neutral) ctx.drawImage(neutral, 0.028 * W, y - 0.0153 * H, 0.1414 * W, 0.061 * H);
+      ctx.fillText(v, 0.1027 * W, y + 0.0191 * H);
+    }
+  });
+  ctx.restore();
+}
+
+// ---------- sagas ----------
+
+interface SagaLayout { boxes: { y: number; height: number; chapters: number }[]; x: number; width: number }
+
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+
+function sagaLayout(card: Card, t: Record<string, TextBoxSpec>): SagaLayout | null {
+  if (!t.ability0 || !t.type) return null;
+  const filled = [0, 1, 2, 3].filter((i) => (card.extra[`ability${i}`] ?? '').trim());
+  const count = Math.max(1, filled.length || 3);
+  const top = t.ability0.y ?? 0.29;
+  const bottom = t.type.y ?? 0.85;
+  const max = bottom - top;
+  // Card Conjurer sizes chapters by how much text they have, with a 15% minimum each.
+  const words = [0, 1, 2, 3].slice(0, count).map((i) => Math.max(1, (card.extra[`ability${i}`] ?? '').replace(/\([^)]*\)/g, '').trim().split(/\s+/).filter(Boolean).length));
+  const totalWords = words.reduce((a, b) => a + b, 0);
+  const minH = max * 0.15;
+  const avail = max - minH * count;
+  let y = top;
+  const boxes: SagaLayout['boxes'] = [];
+  for (let i = 0; i < 4; i++) {
+    const key = `ability${i}`;
+    const base = t[key] ?? t.ability0;
+    if (i < count) {
+      const h = minH + (words[i] / totalWords) * avail;
+      t[key] = { ...base, y, height: h };
+      boxes.push({ y, height: h, chapters: Math.max(1, parseInt(card.extra[`chapters${i}`] ?? '1', 10) || 1) });
+      y += h;
+    } else t[key] = { ...base, y: 2, height: 0 };
+  }
+  return { boxes, x: 0.1, width: 0.3947 };
+}
+
+async function drawSagaChapters(ctx: CanvasRenderingContext2D, saga: SagaLayout) {
+  const chapter = await loadImage('/cc/img/frames/saga/sagaChapter.webp').catch(() => null);
+  const divider = await loadImage('/cc/img/frames/saga/sagaDivider.webp').catch(() => null);
+  ctx.save();
+  ctx.font = `${0.0324 * H}px plantinsemibold`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#000';
+  let n = 1;
+  for (const b of saga.boxes) {
+    const x = saga.x * W, y = b.y * H, w = saga.width * W, h = b.height * H;
+    if (divider) ctx.drawImage(divider, x, y - (0.0029 * H) / 2, w, 0.0029 * H);
+    const nx = x - 0.0614 * W, nw = 0.0787 * W, nh = 0.0629 * H;
+    const ny = y + (h - nh) / 2;
+    const center = (b.chapters - 1) / 2;
+    for (let j = 0; j < b.chapters; j++) {
+      const off = (j - center) * 0.0358 * H * 2;
+      if (chapter) ctx.drawImage(chapter, nx, ny + off, nw, nh);
+      ctx.fillText(ROMAN[n + j - 1] ?? String(n + j), nx + 0.0394 * W, ny + 0.0429 * H + off);
+    }
+    n += b.chapters;
+  }
+  ctx.restore();
+}
+
+// ---------- classes ----------
+
+interface ClassLayout { headers: number[]; x: number; width: number }
+
+function classLayout(card: Card, t: Record<string, TextBoxSpec>): ClassLayout | null {
+  if (!t.level0c) return null;
+  const levels = [1, 2, 3].filter((i) => (card.extra[`level${i}c`] ?? '').trim());
+  const shown = levels.length ? levels : [1, 2];
+  const top = t.level0c.y ?? 0.11;
+  const bottom = 0.8368;
+  const firstH = 0.2;
+  const rest = (bottom - top - firstH - 0.0481 * shown.length) / shown.length;
+  t.level0c = { ...t.level0c, height: firstH };
+  let y = top + firstH + 0.0481;
+  const headers: number[] = [];
+  for (let i = 1; i <= 3; i++) {
+    const idx = shown.indexOf(i);
+    if (idx >= 0) {
+      t[`level${i}a`] = { ...t[`level${i}a`], y: y - 0.0361 };
+      t[`level${i}b`] = { ...t[`level${i}b`], y: y - 0.0361 };
+      t[`level${i}c`] = { ...t[`level${i}c`], y, height: Math.max(0.05, rest) };
+      headers.push(y);
+      y += rest + 0.0481;
+    } else {
+      for (const k of ['a', 'b', 'c']) t[`level${i}${k}`] = { ...t[`level${i}${k}`], y: 2, height: 0 };
+    }
+  }
+  return { headers, x: 0.5093, width: 0.404 };
+}
+
+async function drawClassHeaders(ctx: CanvasRenderingContext2D, cls: ClassLayout) {
+  const bar = await loadImage('/cc/mana/bar.png').catch(() => null);
+  for (const y of cls.headers) {
+    if (bar) ctx.drawImage(bar, cls.x * W, (y - 0.0481) * H, cls.width * W, 0.006 * H);
+  }
 }
 
 /** Adventure / Omen / Prepare: the second spell's name, cost, type and text. */
@@ -381,13 +663,13 @@ async function drawSecondFace(ctx: CanvasRenderingContext2D, card: Card, t: Reco
   const f = card.face2;
   const cost = parseManaCost(f.manaCost).map((s) => `{${s.file}}`).join('');
   if (t.mana2 && cost) {
-    await drawTextBox(ctx, t.mana2, cost, { shadow: { x: -0.001 * CARD_W, y: 0.0029 * CARD_H } });
+    await drawTextBox(ctx, t.mana2, cost, { shadow: { x: -0.001 * W, y: 0.0029 * H } });
   }
   if (f.name.trim()) {
-    const manaRight = ((t.mana2?.x ?? 0) + (t.mana2?.width ?? 0)) * CARD_W;
+    const manaRight = ((t.mana2?.x ?? 0) + (t.mana2?.width ?? 0)) * W;
     const used = cost ? manaCostWidth(f.manaCost, t.mana2 ?? {}) : 0;
-    const titleX = (t.title2.x ?? 0) * CARD_W;
-    const width = Math.min((t.title2.width ?? 1) * CARD_W, cost ? manaRight - used - titleX - CARD_W * 0.008 : Infinity);
+    const titleX = (t.title2.x ?? 0) * W;
+    const width = Math.min((t.title2.width ?? 1) * W, cost ? manaRight - used - titleX - W * 0.008 : Infinity);
     await drawTextBox(ctx, t.title2, f.name, { color: '#fff', width });
   }
   if (t.type2 && f.typeLine.trim()) await drawTextBox(ctx, t.type2, f.typeLine, { color: '#fff' });
@@ -397,15 +679,15 @@ async function drawSecondFace(ctx: CanvasRenderingContext2D, card: Card, t: Reco
 }
 
 async function drawCollectorInfo(ctx: CanvasRenderingContext2D, card: Card) {
-  const size = 0.0171 * CARD_H;
-  const x = 0.0647 * CARD_W;
+  const size = 0.0171 * H;
+  const x = 0.0647 * W;
   ctx.save();
   ctx.fillStyle = '#fff';
   ctx.font = `${size}px gothammedium`;
   const number = [card.collectorNumber, card.setTotal].filter(Boolean).join('/');
-  ctx.fillText(`${number} ${card.rarity}`.trim(), x, 0.9377 * CARD_H + size * 0.85);
+  ctx.fillText(`${number} ${card.rarity}`.trim(), x, 0.9377 * H + size * 0.85);
   const line2 = [card.setCode.trim(), card.language.trim()].filter(Boolean).join(" • ");
-  const y2 = 0.9548 * CARD_H + size * 0.85;
+  const y2 = 0.9548 * H + size * 0.85;
   ctx.fillText(line2, x, y2);
   if (card.artist.trim()) {
     let ax = x + ctx.measureText(line2 + '  ').width;
@@ -421,7 +703,7 @@ async function drawCollectorInfo(ctx: CanvasRenderingContext2D, card: Card) {
   if (card.designer.trim()) {
     ctx.font = `${size}px gothammedium`;
     ctx.textAlign = 'right';
-    ctx.fillText(card.designer, CARD_W - x, 0.9377 * CARD_H + size * 0.85);
+    ctx.fillText(card.designer, W - x, 0.9377 * H + size * 0.85);
   }
   ctx.restore();
 }

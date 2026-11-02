@@ -9,7 +9,8 @@
   "nickname": "M15Nickname-2",
   "borders": "M15Borders",
   "lands": "M15Lands",
-  "adventure": "Adventure",
-  "omen": "Omen",
-  "prepare": "Prepare"
+  "transformCrowns": "TransformLegendCrowns",
+  "modalCrowns": "ModalLegendCrowns",
+  "transformIcons": "M15TransformTypes",
+  "transformIconsBack": "M15TransformTypesBack"
 }

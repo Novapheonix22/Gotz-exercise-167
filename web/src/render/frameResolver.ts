@@ -5,6 +5,7 @@ import type { Card, FrameColor } from '../model/card';
 import { typeLine } from '../model/card';
 import { costColors, type Color } from './symbols';
 import type { Pack, PackFrame } from './packs';
+import { styleById } from '../flow/styles';
 import packIds from './packIds.json';
 
 export interface Bounds { x: number; y: number; width: number; height: number }
@@ -101,7 +102,7 @@ export function effectiveColors(card: Card): { colors: Color[]; type: string } {
   const fc: FrameColor = card.frameColor;
   if (fc === 'auto') {
     if (type.includes('Land')) return { colors: landColors(card.rulesText, type), type };
-    return { colors: costColors(card.manaCost), type };
+    return { colors: costColors(card.manaCost.trim() ? card.manaCost : card.colorCost ?? ''), type };
   }
   if (fc === 'M') return { colors: ['W', 'U', 'B'], type: type.replace(/Artifact|Land/g, '') };
   if (fc === 'A') return { colors: [], type: type.includes('Artifact') ? type : `${type} Artifact` };
@@ -130,17 +131,22 @@ export interface Packs {
   nickname?: Pack;
   borders?: Pack;
   lands?: Pack;
-  adventure?: Pack;
-  omen?: Pack;
-  prepare?: Pack;
+  transformCrowns?: Pack;
+  modalCrowns?: Pack;
+  transformIcons?: Pack;
+  transformIconsBack?: Pack;
+  /** Style packs by Card Conjurer pack id (Adventure, PlaneswalkerRegular, …). */
+  styles: Record<string, Pack>;
 }
 
-/** Styles that have their own frame pack (layout + frame images). */
+/** Add-on pack ids by key (also read by scripts/fetch-assets.mjs). */
+export const ADDON_PACK_IDS: Record<string, string> = packIds;
+
+/** The style's own pack, or undefined for styles drawn with the classic regular-frame builder. */
 export function stylePack(card: Card, packs: Packs): Pack | undefined {
-  if (card.style === 'adventure') return packs.adventure;
-  if (card.style === 'omen') return packs.omen;
-  if (card.style === 'prepare') return packs.prepare;
-  return undefined;
+  const def = styleById(card.style);
+  if (!def || def.pack === 'M15Regular-1') return undefined;
+  return packs.styles[def.pack];
 }
 
 /** The pack whose text box positions the card uses. */
@@ -148,18 +154,24 @@ export function layoutPack(card: Card, packs: Packs): Pack {
   return stylePack(card, packs) ?? packs.regular;
 }
 
-/** Pack ids needed to draw regular cards (also read by scripts/fetch-assets.mjs). */
-export const REGULAR_PACK_IDS: Record<keyof Packs, string> = packIds;
-
 /** Find the frame image for a color letter in the card's frame style. */
 function frameImage(letter: string, card: Card, packs: Packs): PackFrame | undefined {
   const land = letter.length > 1 && letter.endsWith('L');
   const color = base(letter);
   const own = stylePack(card, packs);
   if (own) {
-    const name = land ? 'Land' : letterName(letter);
-    return (card.toggles.nyx && !land && letter !== 'L' ? find(own, `${name} Enchantment Frame`) : undefined)
-      ?? find(own, `${name} Frame`) ?? find(own, 'Artifact Frame') ?? find(own, 'Land Frame');
+    const sfx = styleById(card.style)?.suffix ?? '';
+    const n = letterName(land ? color : letter);
+    const names = [
+      ...(card.toggles.nyx && !land && letter !== 'L' ? [`${n} Enchantment Frame${sfx}`, `${n} Nyx Frame${sfx}`] : []),
+      ...(land ? [`${n} Land Frame${sfx}`, `Land Frame${sfx}`] : []),
+      `${n} Frame${sfx}`, `Artifact Frame${sfx}`, `Land Frame${sfx}`,
+    ];
+    for (const name of names) {
+      const f = find(own, name);
+      if (f) return f;
+    }
+    return own.frames.find((f) => / Frame/.test(f.name) && f.name.endsWith(sfx || 'Frame')) ?? own.frames.find((f) => !f.bounds);
   }
   if (card.toggles.snow && packs.snow) {
     const f = land ? find(packs.snow, `${letterName(color)} Land Frame`) : find(packs.snow, `${letterName(letter)} Frame`);
@@ -179,6 +191,12 @@ function frameImage(letter: string, card: Card, packs: Packs): PackFrame | undef
   }
   return find(packs.regular, `${letterName(letter)} Frame`) ?? find(packs.regular, 'Artifact Frame');
 }
+
+/** Back-face icon that goes with each front-face transform icon. */
+export const TRANSFORM_ICON_PAIRS: Record<string, string> = {
+  'Sun': 'Crescent Moon', 'Compass': 'Land', 'Planeswalker Spark': 'Planeswalker Ember', 'Up Arrow': 'Down Arrow',
+  'Closed Fan': 'Open Fan', 'Lesson': 'Lesson', 'Emrakul': 'Emrakul', 'Full Moon': 'Full Moon', 'Meld': 'Meld',
+};
 
 /** Colors of the second spell's cost, following Card Conjurer's rules for each style. */
 export function secondFaceColors(style: string, cost: string): { colors: string[]; hybrid: boolean } {
@@ -225,14 +243,18 @@ export function buildLayers(card: Card, packs: Packs): FrameLayer[] {
   const p = frameProperties(colors, card.manaCost, type, hasPT);
   const layers: FrameLayer[] = [];
   const regularMasks = find(packs.regular, 'White Frame')?.masks ?? [];
+  const def = styleById(card.style);
+  const own = stylePack(card, packs);
 
   const masked = (letter: string, role: string, maskName: string | null, right = false) => {
     const f = frameImage(letter, card, packs);
     if (!f) return;
     const masks: string[] = [];
     if (maskName) {
-      const m = f.masks?.find((x) => x.name === maskName) ?? regularMasks.find((x) => x.name === maskName);
-      if (m) masks.push(m.src);
+      // Style packs only use their own masks; a part the pack has no mask for is simply not drawn.
+      const m = f.masks?.find((x) => x.name === maskName) ?? (own ? undefined : regularMasks.find((x) => x.name === maskName));
+      if (!m) return;
+      masks.push(m.src);
     }
     if (right) masks.push(RIGHT_HALF);
     layers.push({ role, name: `${f.name} · ${role}${right ? ' (right)' : ''}`, src: f.src, masks });
@@ -254,6 +276,10 @@ export function buildLayers(card: Card, packs: Packs): FrameLayer[] {
     else masked(p.rulesRight, 'Rules', 'Rules', true);
   }
   secondFaceLayers(card, masked);
+  if (def?.halfMask && card.face2.manaCost.trim()) {
+    const c2 = costColors(card.face2.manaCost);
+    masked(c2.length > 1 ? 'M' : c2[0] ?? 'A', 'Second half', def.halfMask);
+  }
   masked(p.typeTitle, 'Title', 'Title');
   masked(p.typeTitle, 'Type', 'Type');
   masked(p.pinline, 'Pinline', 'Pinline');
@@ -261,35 +287,58 @@ export function buildLayers(card: Card, packs: Packs): FrameLayer[] {
 
   if (p.pt) {
     if (!(card.toggles.devoid && add(packs.devoid, 'Devoid Power/Toughness', 'PT'))) {
-      if (!add(stylePack(card, packs), `${letterName(p.pt)} Power/Toughness`, 'PT')) add(packs.regular, `${letterName(p.pt)} Power/Toughness`, 'PT');
+      const n = letterName(p.pt);
+      const sfx = def?.suffix ?? '';
+      // Styles laid out like regular cards borrow the regular P/T box when their pack has none.
+      const found = own
+        ? add(own, `${n} Power/Toughness${sfx}`, 'PT') || add(own, `${n} Power/Toughness`, 'PT') || add(own, `${n} PT`, 'PT')
+          || (!!def?.stamp && add(packs.regular, `${n} Power/Toughness`, 'PT'))
+        : add(packs.regular, `${n} Power/Toughness`, 'PT');
+      void found;
     }
   }
 
   const accent = base(p.pinline);
   const accentRight = p.pinlineRight ? base(p.pinlineRight) : undefined;
   const stampLetter = accent === 'L' && colors.length === 0 ? 'L' : accent;
-  if (card.holoStamp) {
+  if (card.holoStamp && def?.stamp) {
     add(packs.stamps, `${letterName(stampLetter)} Holo Stamp`, 'Stamp');
     if (accentRight) add(packs.stamps, `${letterName(accentRight)} Holo Stamp`, 'Stamp', [RIGHT_HALF]);
   }
 
-  if (card.toggles.nickname) {
+  if (card.toggles.nickname && def?.nickname) {
     add(packs.nickname, `${letterName(accent)} Nickname`, 'Nickname');
     if (accentRight) add(packs.nickname, `${letterName(accentRight)} Nickname`, 'Nickname', [RIGHT_HALF]);
   }
 
-  if (card.legendary !== 'none') {
-    const pack = card.legendary === 'floating' ? packs.floatingCrowns : packs.crowns;
-    if (card.toggles.nyx) {
-      add(packs.nyx, `${letterName(accent)} Inner Crown (Nyx)`, 'Inner Crown');
-      if (accentRight) add(packs.nyx, `${letterName(accentRight)} Inner Crown (Nyx)`, 'Inner Crown', [RIGHT_HALF]);
+  const crownKind = def?.crown ?? 'none';
+  if (card.legendary !== 'none' && crownKind !== 'none') {
+    if (crownKind === 'm15' || crownKind === 'floating') {
+      const pack = crownKind === 'floating' || card.legendary === 'floating' ? packs.floatingCrowns : packs.crowns;
+      if (card.toggles.nyx && crownKind === 'm15') {
+        add(packs.nyx, `${letterName(accent)} Inner Crown (Nyx)`, 'Inner Crown');
+        if (accentRight) add(packs.nyx, `${letterName(accentRight)} Inner Crown (Nyx)`, 'Inner Crown', [RIGHT_HALF]);
+      }
+      add(pack, 'Legend Crown Border Cover', 'Crown Border Cover');
+      add(pack, `${letterName(accent)} Legend Crown`, 'Crown');
+      if (accentRight) add(pack, `${letterName(accentRight)} Legend Crown`, 'Crown', [RIGHT_HALF]);
+    } else {
+      const pack = crownKind === 'modal' ? packs.modalCrowns : packs.transformCrowns;
+      const sfx = crownKind === 'transformBack' ? ' (Back)' : '';
+      add(pack, 'Legend Crown Border Cover', 'Crown Border Cover');
+      add(pack, `${letterName(accent)} Legend Crown${sfx}`, 'Crown');
+      if (accentRight) add(pack, `${letterName(accentRight)} Legend Crown${sfx}`, 'Crown', [RIGHT_HALF]);
     }
-    add(pack, 'Legend Crown Border Cover', 'Crown Border Cover');
-    add(pack, `${letterName(accent)} Legend Crown`, 'Crown');
-    if (accentRight) add(pack, `${letterName(accentRight)} Legend Crown`, 'Crown', [RIGHT_HALF]);
   }
 
-  if (card.border !== 'black') {
+  // Some planeswalker packs keep the loyalty box as a separate piece.
+  if (def?.special?.startsWith('planeswalker') && (card.extra.loyalty ?? '').trim()) add(own, 'Loyalty Box', 'Loyalty');
+
+  // Transform icon in the title bar (Sun/Moon, Compass/Land, …)
+  if (card.style === 'transform') add(packs.transformIcons, card.transformIcon || 'Sun', 'Transform Icon');
+  if (card.style === 'transform-back') add(packs.transformIconsBack, card.transformIcon || 'Crescent Moon', 'Transform Icon');
+
+  if (card.border !== 'black' && !own) {
     const name = `${card.border[0].toUpperCase()}${card.border.slice(1)} Border`;
     const f = find(packs.borders, name);
     const mask = f?.masks?.find((m) => m.name === (card.legendary !== 'none' ? 'Border (With Crown)' : 'Border'));

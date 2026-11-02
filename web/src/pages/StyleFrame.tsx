@@ -1,7 +1,8 @@
-import { defaultFace2Type, type Border, type Card, type CardSet, type FrameColor, type FrameToggles, type Legendary } from '../model/card';
+import { blankCard, type Border, type Card, type CardSet, type FrameColor, type FrameToggles, type Legendary } from '../model/card';
 import type { Packs } from '../render/frameResolver';
 import type { Store } from '../data/store';
-import { familyById } from '../flow/families';
+import { familyById, styleSupports } from '../flow/families';
+import { TRANSFORM_ICON_PAIRS } from '../render/frameResolver';
 import { CardCanvas } from '../components/CardCanvas';
 import SetPicker from '../components/SetPicker';
 import { Diagram, Steps } from './KindPicker';
@@ -39,19 +40,19 @@ export default function StyleFrame({ card, setCard, packs, store, sets, onSetsCh
   if (!family) return null;
   const set = <K extends keyof Card>(k: K, v: Card[K]) => setCard({ ...card, [k]: v });
   const pickStyle = (id: string) => {
-    const next = { ...card, style: id };
-    // Keep the second spell's type line in step with the style unless it was edited.
-    const oldDefault = defaultFace2Type(card.style);
-    if (!card.face2.typeLine || card.face2.typeLine === oldDefault) next.face2 = { ...card.face2, typeLine: defaultFace2Type(id) };
-    if (id === 'land') { next.cardType = 'Land'; next.power = ''; next.toughness = ''; }
-    if (id === 'vehicle') { next.cardType = 'Artifact'; next.subtype = next.subtype.includes('Vehicle') ? next.subtype : `Vehicle ${next.subtype}`.trim(); }
-    if (id === 'regular' && (card.style === 'land' || card.style === 'vehicle')) {
-      next.cardType = 'Creature';
-      next.subtype = next.subtype.replace(/\bVehicle\b\s*/, '');
-    }
-    setCard(next);
+    // Start from the new style's defaults, keeping the frame choices and set already made.
+    const fresh = blankCard(card.family, id);
+    setCard({
+      ...fresh,
+      id: card.id,
+      legendary: styleSupports(id).legendary ? card.legendary : 'none',
+      toggles: card.toggles, frameColor: card.frameColor, border: card.border,
+      setId: card.setId, setCode: card.setCode, designer: card.designer, holoStamp: card.holoStamp,
+      supertype: card.legendary !== 'none' && !/Legendary/.test(fresh.supertype) ? `Legendary ${fresh.supertype}`.trim() : fresh.supertype,
+      back: fresh.back ? { ...fresh.back, id: card.id + '-back' } : undefined,
+    });
   };
-  const s = family.supports;
+  const s = styleSupports(card.style);
   const visibleToggles = TOGGLES.filter((t) => s[t.key]);
   const chooseSet = (st: CardSet | null) => setCard({ ...card, setId: st?.id ?? null, setCode: st?.code ?? card.setCode });
   const symbol = sets.find((x) => x.id === card.setId)?.symbol;
@@ -126,6 +127,22 @@ export default function StyleFrame({ card, setCard, packs, store, sets, onSetsCh
           </select>
         </label>
       </div>
+
+      {card.style === 'transform' && (
+        <div className="group">
+          <label className="field">
+            <span>Transform icon (front / back)</span>
+            <select value={card.transformIcon || 'Sun'} onChange={(e) => setCard({
+              ...card, transformIcon: e.target.value,
+              back: card.back ? { ...card.back, transformIcon: TRANSFORM_ICON_PAIRS[e.target.value] ?? e.target.value } : card.back,
+            })}>
+              {Object.entries(TRANSFORM_ICON_PAIRS).map(([front, back]) => (
+                <option key={front} value={front}>{front === back ? front : `${front} → ${back}`}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
 
       <div className="group">
         <span className="field-label">Set and symbol</span>

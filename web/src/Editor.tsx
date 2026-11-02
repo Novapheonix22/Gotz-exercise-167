@@ -9,6 +9,9 @@ import { CardCanvas } from './components/CardCanvas';
 import SetPicker, { StoredImage } from './components/SetPicker';
 import { familyById } from './flow/families';
 import { Steps } from './pages/KindPicker';
+import { styleById } from './flow/styles';
+import { layoutPack } from './render/frameResolver';
+import { extraText } from './render/renderer';
 
 const PREVIEW_SCALE = 0.4;
 const COLOR_KEYS = ['W', 'U', 'B', 'R', 'G', 'C', 'X', 'S'];
@@ -50,7 +53,33 @@ async function exportCard(card: Card, packs: Packs, kind: 'png' | 'jpg', setSymb
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function Editor({ card, setCard, packs, store, sets, onSetsChanged, saveState, isNew, onDone, onChangeStyle }: Props) {
+/** Fields the back face shares with the front (set, numbering, artist…). */
+const SHARED: (keyof Card)[] = ['setId', 'setCode', 'collectorNumber', 'setTotal', 'rarity', 'language', 'artist', 'designer', 'setSymbol', 'tintSymbol', 'holoStamp', 'border'];
+
+/** The card to draw for a face: the back borrows the shared fields from the front. */
+export function faceCard(root: Card, face: 'front' | 'back'): Card {
+  if (face === 'front' || !root.back) return root;
+  const shared = Object.fromEntries(SHARED.map((k) => [k, root[k]]));
+  return { ...root.back, ...shared, colorCost: root.manaCost } as Card;
+}
+
+const STANDARD_BOXES = new Set(['mana', 'title', 'type', 'rules', 'pt', 'mana2', 'title2', 'type2', 'rules2', 'nickname']);
+
+export default function Editor({ card: root, setCard: setRoot, packs, store, sets, onSetsChanged, saveState, isNew, onDone, onChangeStyle }: Props) {
+  const [face, setFace] = useState<'front' | 'back'>('front');
+  const onBack = face === 'back' && !!root.back;
+  const card = faceCard(root, onBack ? 'back' : 'front');
+  const setCard = (updater: (c: Card) => Card) => {
+    if (onBack) setRoot((r) => (r.back ? { ...r, back: updater({ ...r.back }) } : r));
+    else setRoot(updater);
+  };
+  const def = styleById(card.style);
+  const boxes = layoutPack(card, packs).version?.text ?? {};
+  const rulesKey = def?.mainRules ?? 'rules';
+  const extraKeys = Object.keys(boxes).filter((k) => !STANDARD_BOXES.has(k) && k !== rulesKey);
+  const setExtra = (key: string, value: string) => setCard((c) => ({ ...c, extra: { ...c.extra, [key]: value } }));
+  const pwStyle = def?.special?.startsWith('planeswalker');
+  const sagaStyle = def?.special === 'saga';
   const [exporting, setExporting] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const drag = useRef<{ x: number; y: number; ax: number; ay: number } | null>(null);
@@ -110,6 +139,15 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
       </div>
       <main className="layout">
         <section className="preview" aria-label="Card preview">
+          {root.back && (
+            <div className="segmented two face-switch" role="radiogroup" aria-label="Card face">
+              {(['front', 'back'] as const).map((f) => (
+                <button key={f} type="button" role="radio" aria-checked={face === f} className={face === f ? 'on' : ''} onClick={() => setFace(f)}>
+                  {f === 'front' ? 'Front' : 'Back'}
+                </button>
+              ))}
+            </div>
+          )}
           <CardCanvas
             card={card} packs={packs} scale={PREVIEW_SCALE} setSymbol={setSymbol} className="card"
             onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
@@ -179,6 +217,7 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
           </fieldset>
 
           <fieldset className="group">
+            {boxes[rulesKey] && (<>
             <label className="field">
               <span>Rules text</span>
               <textarea rows={5} value={card.rulesText} onChange={(e) => set('rulesText', e.target.value)} />
@@ -206,7 +245,8 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
               <span>Flavor text</span>
               <textarea rows={2} value={card.flavorText} onChange={(e) => set('flavorText', e.target.value)} />
             </label>
-            {!isLand && (
+            </>)}
+            {!isLand && boxes.pt && (
               <div className="row two">
                 <label className="field"><span>Power</span><input value={card.power} inputMode="numeric" onChange={(e) => set('power', e.target.value)} /></label>
                 <label className="field"><span>Toughness</span><input value={card.toughness} inputMode="numeric" onChange={(e) => set('toughness', e.target.value)} /></label>
@@ -214,9 +254,9 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
             )}
           </fieldset>
 
-          {SECOND_FACE[card.style] && (
+          {boxes.title2 && (
             <fieldset className="group">
-              <legend>{SECOND_FACE[card.style]}</legend>
+              <legend>{SECOND_FACE[card.style] ?? 'Second half'}</legend>
               <div className="row two">
                 <label className="field"><span>Name</span><input value={card.face2.name} onChange={(e) => setFace2('name', e.target.value)} /></label>
                 <label className="field"><span>Mana cost</span>
@@ -224,9 +264,9 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
                     onBlur={(e) => setFace2('manaCost', normalizeManaCost(e.target.value))} />
                 </label>
               </div>
-              <div className="mana-keys" role="group" aria-label={`Add mana to the ${SECOND_FACE[card.style]}`}>
+              <div className="mana-keys" role="group" aria-label={`Add mana to the ${SECOND_FACE[card.style] ?? 'Second half'}`}>
                 {COLOR_KEYS.map((k) => (
-                  <button key={k} type="button" className="mana-key" onClick={() => setFace2('manaCost', normalizeManaCost(card.face2.manaCost + `{${k}}`))} aria-label={`Add ${k} to ${SECOND_FACE[card.style]}`}>
+                  <button key={k} type="button" className="mana-key" onClick={() => setFace2('manaCost', normalizeManaCost(card.face2.manaCost + `{${k}}`))} aria-label={`Add ${k} to ${SECOND_FACE[card.style] ?? 'Second half'}`}>
                     <img src={`/cc/mana/${k.toLowerCase()}.svg`} alt="" />
                   </button>
                 ))}
@@ -237,6 +277,62 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
                 <span>Text</span>
                 <textarea rows={3} value={card.face2.rulesText} onChange={(e) => setFace2('rulesText', e.target.value)} />
               </label>
+            </fieldset>
+          )}
+
+          {pwStyle && (
+            <fieldset className="group">
+              <legend>Loyalty abilities</legend>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="ability-row">
+                  <label className="field cost"><span>Cost</span>
+                    <input value={card.extra[`cost${i}`] ?? ''} placeholder={i === 0 ? '+1' : ''} onChange={(e) => setExtra(`cost${i}`, e.target.value)} />
+                  </label>
+                  <label className="field grow"><span>Ability {i + 1}</span>
+                    <textarea rows={2} value={card.extra[`ability${i}`] ?? ''} onChange={(e) => setExtra(`ability${i}`, e.target.value)} />
+                  </label>
+                </div>
+              ))}
+              <label className="field"><span>Starting loyalty</span><input value={card.extra.loyalty ?? ''} inputMode="numeric" onChange={(e) => setExtra('loyalty', e.target.value)} /></label>
+              <small className="muted">Leave a cost empty for a static ability. Empty abilities at the end are hidden.</small>
+            </fieldset>
+          )}
+
+          {sagaStyle && (
+            <fieldset className="group">
+              <legend>Chapters</legend>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="ability-row">
+                  <label className="field cost"><span>Chapters</span>
+                    <select value={card.extra[`chapters${i}`] ?? '1'} onChange={(e) => setExtra(`chapters${i}`, e.target.value)}>
+                      {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </label>
+                  <label className="field grow"><span>Chapter text {i + 1}</span>
+                    <textarea rows={2} value={card.extra[`ability${i}`] ?? ''} onChange={(e) => setExtra(`ability${i}`, e.target.value)} />
+                  </label>
+                </div>
+              ))}
+              <small className="muted">Each box covers one or more chapters (e.g. 2 makes “I, II”). Empty boxes are hidden.</small>
+            </fieldset>
+          )}
+
+          {extraKeys.filter((k) => !(pwStyle && /^(ability\d|loyalty)$/.test(k)) && !(sagaStyle && /^ability\d$/.test(k))).length > 0 && (
+            <fieldset className="group">
+              <legend>{def?.name ?? 'Style'} details</legend>
+              {extraKeys.filter((k) => !(pwStyle && /^(ability\d|loyalty)$/.test(k)) && !(sagaStyle && /^ability\d$/.test(k))).map((k) => {
+                const spec = boxes[k];
+                const multi = !spec.oneLine;
+                const value = card.extra[k] ?? extraText(card, k, spec);
+                return (
+                  <label key={k} className="field">
+                    <span>{spec.name ?? k}</span>
+                    {multi
+                      ? <textarea rows={2} value={value} onChange={(e) => setExtra(k, e.target.value)} />
+                      : <input value={value} onChange={(e) => setExtra(k, e.target.value)} />}
+                  </label>
+                );
+              })}
             </fieldset>
           )}
 
@@ -261,6 +357,7 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
             <label className="field"><span>Artist</span><input value={card.artist} onChange={(e) => set('artist', e.target.value)} /></label>
           </fieldset>
 
+          {onBack ? <p className="muted small">Set, number, rarity and artist are shared with the front face.</p> : (
           <fieldset className="group">
             <legend>Set and collector info</legend>
             <SetPicker store={store} sets={sets} value={card.setId} onChange={chooseSet} onSetsChanged={onSetsChanged} />
@@ -298,6 +395,8 @@ export default function Editor({ card, setCard, packs, store, sets, onSetsChange
               <input type="checkbox" role="switch" checked={card.tintSymbol} onChange={(e) => set('tintSymbol', e.target.checked)} />
             </label>
           </fieldset>
+
+          )}
 
           <fieldset className="group">
             <legend>Frame</legend>

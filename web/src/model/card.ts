@@ -1,3 +1,4 @@
+import { styleById } from '../flow/styles';
 export type Legendary = 'none' | 'crown' | 'floating';
 export type Rarity = 'C' | 'U' | 'R' | 'M' | 'L' | 'P' | 'S' | 'T';
 export type Border = 'black' | 'white' | 'silver' | 'gold';
@@ -62,6 +63,14 @@ export interface Card {
   designer: string;
 
   face2: SecondFace;
+  /** Text for style-specific boxes (planeswalker abilities, saga chapters, levels, loyalty, …), keyed by the pack's box id. */
+  extra: Record<string, string>;
+  /** Transform icon shown in the title bar (front), e.g. "Sun". */
+  transformIcon: string;
+  /** Back face of a double-faced card. */
+  back?: Card;
+  /** Mana cost to take frame colors from when the card has none (back faces use the front's). */
+  colorCost?: string;
 
   art?: ArtState;
   /** Set symbol image reference (overrides the set's symbol), same format as art src. */
@@ -86,6 +95,25 @@ export function typeLine(card: Card): string {
 }
 
 export function blankCard(family = 'normal', style = 'regular'): Card {
+  const def = styleById(style);
+  const card = baseCard(family, style);
+  if (def?.defaults) {
+    card.cardType = def.defaults.cardType ?? card.cardType;
+    card.subtype = def.defaults.subtype ?? card.subtype;
+    card.supertype = def.defaults.supertype ?? card.supertype;
+  }
+  if (def?.special?.startsWith('planeswalker')) {
+    card.extra = { cost0: '+1', cost1: '−2', cost2: '−7', loyalty: '4' };
+    card.legendary = 'none';
+  }
+  if (def?.special === 'saga') card.extra = { chapters0: '1', chapters1: '1', chapters2: '1' };
+  if (def?.back) card.back = { ...blankCard(family, def.back), id: card.id + '-back' };
+  if (style === 'transform') card.transformIcon = 'Sun';
+  if (style === 'transform-back') card.transformIcon = 'Crescent Moon';
+  return card;
+}
+
+function baseCard(family: string, style: string): Card {
   return {
     id: crypto.randomUUID(),
     family,
@@ -115,6 +143,8 @@ export function blankCard(family = 'normal', style = 'regular'): Card {
     designer: '',
     tintSymbol: true,
     face2: { name: '', manaCost: '', typeLine: defaultFace2Type(style), rulesText: '' },
+    extra: {},
+    transformIcon: '',
   };
 }
 
@@ -128,7 +158,13 @@ export function defaultFace2Type(style: string) {
 /** Fill in fields missing from cards saved by older versions. */
 export function upgradeCard(raw: Partial<Card> & { id: string }): Card {
   const base = blankCard(raw.family, raw.style);
-  return { ...base, ...raw, toggles: { ...base.toggles, ...(raw.toggles ?? {}) }, face2: { ...base.face2, ...(raw.face2 ?? {}) } };
+  return {
+    ...base, ...raw,
+    toggles: { ...base.toggles, ...(raw.toggles ?? {}) },
+    face2: { ...base.face2, ...(raw.face2 ?? {}) },
+    extra: { ...(raw.extra ?? {}) },
+    back: raw.back ? upgradeCard(raw.back) : undefined,
+  };
 }
 
 export function sampleCard(): Card {

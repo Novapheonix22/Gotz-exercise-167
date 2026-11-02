@@ -1,23 +1,24 @@
 import { useEffect, useRef, useState, type CanvasHTMLAttributes } from 'react';
 import type { Card } from '../model/card';
-import { REGULAR_PACK_IDS, type Packs } from '../render/frameResolver';
+import { ADDON_PACK_IDS, type Packs } from '../render/frameResolver';
+import { STYLE_PACK_IDS } from '../flow/styles';
 import { loadPack } from '../render/packs';
 import { CARD_H, CARD_W, renderCard } from '../render/renderer';
 
 let packsPromise: Promise<Packs> | null = null;
 export function loadAllPacks(): Promise<Packs> {
-  // Only the regular pack is required; a missing optional pack just disables that frame option.
-  packsPromise ??= Promise.all(
-    Object.entries(REGULAR_PACK_IDS).map(async ([key, id]) => {
-      try {
-        return [key, await loadPack(id)] as const;
-      } catch (e) {
-        if (key === 'regular') throw e;
-        console.warn(`Optional frame pack ${id} is missing`);
-        return [key, undefined] as const;
-      }
-    }),
-  ).then((entries) => Object.fromEntries(entries.filter(([, v]) => v)) as unknown as Packs);
+  // Only the regular pack is required; a missing optional pack just disables that frame or style.
+  const optional = async (id: string) => {
+    try { return await loadPack(id); } catch { console.warn(`Optional frame pack ${id} is missing`); return undefined; }
+  };
+  packsPromise ??= (async () => {
+    const addons = await Promise.all(Object.entries(ADDON_PACK_IDS).map(async ([key, id]) => [key, key === 'regular' ? await loadPack(id) : await optional(id)] as const));
+    const styles = await Promise.all(STYLE_PACK_IDS.map(async (id) => [id, await optional(id)] as const));
+    return {
+      ...Object.fromEntries(addons.filter(([, v]) => v)),
+      styles: Object.fromEntries(styles.filter(([, v]) => v)),
+    } as unknown as Packs;
+  })();
   return packsPromise;
 }
 

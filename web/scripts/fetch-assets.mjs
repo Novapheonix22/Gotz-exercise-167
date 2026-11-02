@@ -7,7 +7,7 @@
 // Usage: node scripts/fetch-assets.mjs [packId ...]
 //   With no pack ids, fetches DEFAULT_PACKS.
 
-import { mkdir, writeFile, readFile, access } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, access, cp } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as acorn from 'acorn';
@@ -15,13 +15,21 @@ import sharp from 'sharp';
 
 const ORIGIN = 'https://cardconjurer.app';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const CACHE = join(ROOT, '.cache', 'cc');
+// node_modules/.cache survives between Vercel builds, so downloads and conversions are reused.
+const CACHE = join(ROOT, 'node_modules', '.cache', 'cardconjurer');
+const CONVERTED = join(CACHE, 'converted');
 const OUT = join(ROOT, 'public', 'cc');
+const RAW = join(CACHE, 'raw');
 
 // Every pack the app uses. Shared with the app so the two lists can't drift apart.
-const DEFAULT_PACKS = Object.values(JSON.parse(await readFile(join(ROOT, 'src', 'render', 'packIds.json'), 'utf8')));
+const ADDON_PACKS = Object.values(JSON.parse(await readFile(join(ROOT, 'src', 'render', 'packIds.json'), 'utf8')));
+// Style packs are listed in src/flow/styles.ts as `pack: '<id>'`.
+const STYLE_PACKS = [...(await readFile(join(ROOT, 'src', 'flow', 'styles.ts'), 'utf8')).matchAll(/pack: '([^']+)'/g)].map((m) => m[1]);
+const DEFAULT_PACKS = [...new Set([...ADDON_PACKS, ...STYLE_PACKS])];
 
-const FONTS = ['beleren-b', 'beleren-bsc', 'mplantin', 'mplantin-i', 'gotham-medium'];
+// Font files as named on Card Conjurer; saved under the same names.
+const FONTS = ['beleren-b.ttf', 'beleren-bsc.ttf', 'mplantin.ttf', 'mplantin-i.ttf', 'gotham-medium.ttf',
+  'matrix.ttf', 'matrix-b.ttf', 'Matrix Bold Small Caps.ttf', 'plantin-semibold.otf', 'goudy-medieval.ttf'];
 
 const MANA = [
   ...Array.from({ length: 21 }, (_, i) => String(i)),
@@ -33,7 +41,14 @@ const MANA = [
 ];
 const MANA_PNG = ['bar.png'];
 // Shared masks used to put a layer on only half of the card (two-color frames).
-const EXTRA_IMAGES = ['/img/frames/maskRightHalf.png', '/img/frames/maskLeftHalf.png', '/img/black.png'];
+const EXTRA_IMAGES = ['/img/frames/maskRightHalf.png', '/img/frames/maskLeftHalf.png', '/img/black.png',
+  // Planeswalker loyalty badges, ability stripes and text masks
+  '/img/frames/planeswalker/planeswalkerPlus.png', '/img/frames/planeswalker/planeswalkerMinus.png',
+  '/img/frames/planeswalker/planeswalkerNeutral.png', '/img/frames/planeswalker/abilityLineOdd.png',
+  '/img/frames/planeswalker/abilityLineEven.png', '/img/frames/planeswalker/text.svg',
+  '/img/frames/planeswalker/tall/planeswalkerTallMaskRules.png', '/img/frames/planeswalker/transform/textFront.svg',
+  // Saga chapter markers
+  '/img/frames/saga/sagaChapter.png', '/img/frames/saga/sagaDivider.png'];
 
 async function exists(path) {
   try { await access(path); return true; } catch { return false; }
@@ -149,10 +164,10 @@ function parsePack(source) {
 // ---------- conversion ----------
 
 async function fetchFrameImage(src) {
-  const buf = await download(src, join(CACHE, src));
+  const buf = await download(src, join(RAW, src));
   const isSvg = /\.svg$/i.test(src);
   const webpRel = src.replace(/^\//, '').replace(/\.(png|svg)$/i, '.webp');
-  const outPath = join(OUT, webpRel);
+  const outPath = join(CONVERTED, webpRel);
   if (!(await exists(outPath))) {
     await mkdir(dirname(outPath), { recursive: true });
     // SVG masks are drawn over the whole card, so rasterize them at full card size.
@@ -163,28 +178,35 @@ async function fetchFrameImage(src) {
 }
 
 async function fetchPack(id) {
-  const js = (await download(`/js/frames/pack${id}.js`, join(CACHE, 'packs', `${id}.js`))).toString('utf8');
+  const js = (await download(`/js/frames/pack${id}.js`, join(RAW, 'packs', `${id}.js`))).toString('utf8');
   const pack = parsePack(js);
   const imageMap = new Map();
   const convert = async (src) => {
     if (!src || !/\.(png|svg)$/i.test(src)) return src;
-    if (!imageMap.has(src)) imageMap.set(src, await fetchFrameImage(src));
+    if (!imageMap.has(src)) imageMap.set(src, fetchFrameImage(src));
     return imageMap.get(src);
   };
   // Card Conjurer occasionally lists an image it doesn't have. Skip those instead of failing the build.
   const tryConvert = async (src) => {
     try { return await convert(src); } catch (err) { console.warn(`  skipped ${src}: ${err.message}`); return null; }
   };
-  const frames = [];
-  for (const f of pack.frames) {
-    if (!f || !f.src) continue;
-    const src = await tryConvert(f.src);
-    if (!src) continue;
-    const masks = f.masks
-      ? (await Promise.all(f.masks.map(async (m) => ({ name: m.name, src: await tryConvert(m.src) })))).filter((m) => m.src)
-      : undefined;
-    frames.push({ name: f.name, src, masks, bounds: f.bounds, complementary: f.complementary });
-  }
+  // Convert frames 8 at a time, keeping the pack's order.
+  const list = pack.frames.filter((f) => f && f.src);
+  const results = new Array(list.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: 8 }, async () => {
+    while (next < list.length) {
+      const i = next++;
+      const f = list[i];
+      const src = await tryConvert(f.src);
+      if (!src) continue;
+      const masks = f.masks
+        ? (await Promise.all(f.masks.map(async (m) => ({ name: m.name, src: await tryConvert(m.src) })))).filter((m) => m.src)
+        : undefined;
+      results[i] = { name: f.name, src, masks, bounds: f.bounds, complementary: f.complementary };
+    }
+  }));
+  const frames = results.filter(Boolean);
   const manifest = { id, frames, version: pack.version };
   await mkdir(join(OUT, 'packs'), { recursive: true });
   await writeFile(join(OUT, 'packs', `${id}.json`), JSON.stringify(manifest, null, 2));
@@ -194,13 +216,13 @@ async function fetchPack(id) {
 async function main() {
   const packs = process.argv.slice(2);
   for (const f of FONTS) {
-    const buf = await download(`/fonts/${f}.ttf`, join(CACHE, 'fonts', `${f}.ttf`));
+    const buf = await download(`/fonts/${encodeURIComponent(f)}`, join(RAW, 'fonts', f));
     await mkdir(join(OUT, 'fonts'), { recursive: true });
-    await writeFile(join(OUT, 'fonts', `${f}.ttf`), buf);
+    await writeFile(join(OUT, 'fonts', f), buf);
   }
   console.log(`fonts: ${FONTS.length}`);
   for (const m of [...MANA.map((n) => n + '.svg'), ...MANA_PNG]) {
-    const buf = await download(`/img/manaSymbols/${m}`, join(CACHE, 'mana', m));
+    const buf = await download(`/img/manaSymbols/${m}`, join(RAW, 'mana', m));
     await mkdir(join(OUT, 'mana'), { recursive: true });
     await writeFile(join(OUT, 'mana', m), buf);
   }
@@ -208,6 +230,8 @@ async function main() {
   for (const src of EXTRA_IMAGES) await fetchFrameImage(src);
   console.log(`extra images: ${EXTRA_IMAGES.length}`);
   for (const id of packs.length ? packs : DEFAULT_PACKS) await fetchPack(id);
+  await cp(CONVERTED, OUT, { recursive: true });
+  console.log('copied converted images to public/cc');
 }
 
 main().catch((err) => { console.error(err); process.exit(1); });
